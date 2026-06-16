@@ -7,7 +7,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   RefreshControl,
-  Dimensions,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useNavigation } from "@react-navigation/native";
@@ -38,7 +37,7 @@ import WatchlistWidget from "../../components/dashboard/WatchlistWidget";
 
 import { formatCurrency, formatPercentage } from "../../utils";
 import { COLORS, SPACING } from "../../constants";
-import { Strategy, Alert, NewsArticle } from "../../types";
+import { Strategy, Alert } from "../../types";
 
 const DashboardScreen = () => {
   const navigation = useNavigation<any>();
@@ -46,7 +45,9 @@ const DashboardScreen = () => {
   const { addAlert } = useAlert();
 
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedTimeframe, setSelectedTimeframe] = useState("1D");
+  const [selectedTimeframe, setSelectedTimeframe] = useState<
+    "1D" | "1W" | "1M" | "3M" | "1Y" | "ALL"
+  >("1D");
 
   const {
     data: portfolioData,
@@ -148,10 +149,13 @@ const DashboardScreen = () => {
     navigation.navigate("Notifications");
   }, [navigation]);
 
-  const handleTimeframeChange = useCallback((timeframe: string) => {
-    setSelectedTimeframe(timeframe);
-    HapticFeedback.trigger("impactLight");
-  }, []);
+  const handleTimeframeChange = useCallback(
+    (timeframe: "1D" | "1W" | "1M" | "3M" | "1Y" | "ALL") => {
+      setSelectedTimeframe(timeframe);
+      HapticFeedback.trigger("impactLight");
+    },
+    [],
+  );
 
   const renderHeader = () => (
     <Card
@@ -199,7 +203,9 @@ const DashboardScreen = () => {
       return <SkeletonLoader type="card" style={styles.portfolioSummary} />;
     }
 
-    if (!portfolioData) return null;
+    if (!portfolioData) {
+      return null;
+    }
 
     // portfolioService returns percentChange (not dailyChangePercent)
     const isPositive = (portfolioData.dailyChange ?? 0) >= 0;
@@ -252,7 +258,9 @@ const DashboardScreen = () => {
       return <SkeletonLoader type="chart" style={styles.chartContainer} />;
     }
 
-    if (!performanceData) return null;
+    if (!performanceData) {
+      return null;
+    }
 
     const chartData = {
       labels: performanceData.labels,

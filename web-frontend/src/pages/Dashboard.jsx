@@ -34,7 +34,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch } from "react-redux";
 import {
   Area,
   AreaChart,
@@ -128,29 +128,12 @@ const Dashboard = () => {
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [transactionMsg, setTransactionMsg] = useState("");
 
-  // Get data from Redux store and API
-  const { portfolioValue, dailyChange, percentChange, historicalData } =
-    useSelector((state) => state.portfolio);
-  const { strategies, recentTrades } = useSelector((state) => state.strategy);
-
   // RTK Query hooks with automatic loading and error states
-  const {
-    data: portfolioData,
-    isLoading: portfolioLoading,
-    error: portfolioError,
-  } = useGetPortfolioQuery();
+  const { data: portfolioData } = useGetPortfolioQuery();
 
-  const {
-    data: strategiesData,
-    isLoading: strategiesLoading,
-    error: strategiesError,
-  } = useGetStrategiesQuery();
+  const { data: strategiesData } = useGetStrategiesQuery();
 
-  const {
-    data: tradesData,
-    isLoading: tradesLoading,
-    error: tradesError,
-  } = useGetTradesQuery({ limit: 5 });
+  const { data: tradesData } = useGetTradesQuery({ limit: 5 });
 
   // Use mock data for demonstration
   const displayPortfolioData = portfolioData || mockPortfolioData;

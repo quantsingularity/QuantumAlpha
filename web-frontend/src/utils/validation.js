@@ -62,7 +62,12 @@ export const isValidPhone = (phone) => {
   if (!phone) return false;
   const phoneRegex =
     /^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/;
-  return phoneRegex.test(phone);
+  if (!phoneRegex.test(phone)) return false;
+  // Require a realistic number of digits so short strings such as "123" are
+  // rejected. Most phone numbers have at least 7 digits (local) and at most 15
+  // (E.164 maximum).
+  const digitCount = phone.replace(/\D/g, "").length;
+  return digitCount >= 7 && digitCount <= 15;
 };
 
 /**

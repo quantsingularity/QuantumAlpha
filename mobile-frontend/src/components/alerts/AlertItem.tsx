@@ -102,7 +102,9 @@ const AlertItem: React.FC<AlertItemProps> = ({ alert, onPress, onDismiss }) => {
     }
   };
 
-  if (dismissed) return null;
+  if (dismissed) {
+    return null;
+  }
 
   const alertColor = getAlertColor(alert.priority);
   const slideTranslate = slideAnim.interpolate({

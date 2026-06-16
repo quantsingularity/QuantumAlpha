@@ -111,9 +111,9 @@ class RiskManager:
             self._calculate_leverage(portfolio)
             order_value = await self._estimate_order_value(order_request)
             estimated_leverage = (
-                portfolio.invested_amount + order_value
-            ) / portfolio.total_value
-            if estimated_leverage > portfolio.max_leverage:
+                Decimal(str(portfolio.invested_amount)) + order_value
+            ) / Decimal(str(portfolio.total_value))
+            if estimated_leverage > Decimal(str(portfolio.max_leverage)):
                 raise RiskViolationError(
                     f"Order would exceed maximum leverage of {portfolio.max_leverage}"
                 )
@@ -134,14 +134,16 @@ class RiskManager:
                     )
                     .first()
                 )
-                current_quantity = position.quantity if position else Decimal("0")
+                current_quantity = (
+                    Decimal(str(position.quantity)) if position else Decimal("0")
+                )
                 if order_request.side == OrderSide.BUY:
                     current_quantity = current_quantity + order_request.quantity
                 else:
                     current_quantity = current_quantity - order_request.quantity
                 order_value = await self._estimate_order_value(order_request)
-                position_weight = order_value / portfolio.total_value
-                if position_weight > portfolio.max_position_size:
+                position_weight = order_value / Decimal(str(portfolio.total_value))
+                if position_weight > Decimal(str(portfolio.max_position_size)):
                     raise RiskViolationError(
                         f"Order would exceed maximum position size of {portfolio.max_position_size}"
                     )
@@ -153,7 +155,7 @@ class RiskManager:
         if order_request.side == OrderSide.BUY:
             order_value = await self._estimate_order_value(order_request)
             required_cash = order_value * Decimal("1.01")
-            if portfolio.cash_balance < required_cash:
+            if Decimal(str(portfolio.cash_balance)) < required_cash:
                 raise InsufficientFundsError(
                     f"Insufficient cash balance. Required: {required_cash}, Available: {portfolio.cash_balance}"
                 )
@@ -174,6 +176,8 @@ class RiskManager:
                 today = datetime.now(timezone.utc).date().isoformat()
                 daily_volume_key = f"daily_volume:{portfolio.id}:{today}"
                 current_volume = self.redis_client.get(daily_volume_key)
+                if isinstance(current_volume, bytes):
+                    current_volume = current_volume.decode("utf-8")
                 current_volume = (
                     Decimal(current_volume) if current_volume else Decimal("0")
                 )
@@ -191,7 +195,9 @@ class RiskManager:
         """Calculate current portfolio leverage"""
         if portfolio.total_value <= 0:
             return Decimal("0")
-        return portfolio.invested_amount / portfolio.total_value
+        return Decimal(str(portfolio.invested_amount)) / Decimal(
+            str(portfolio.total_value)
+        )
 
     async def _estimate_order_value(self, order_request: OrderRequest) -> Decimal:
         """Estimate the value of an order"""
@@ -231,7 +237,7 @@ class OrderManager:
                     raise OrderValidationError("Portfolio not found")
                 await self.risk_manager.validate_order_risk(order_request, portfolio)
                 order = Order(
-                    order_id=uuid.uuid4(),
+                    order_id=str(uuid.uuid4()),
                     user_id=order_request.user_id or portfolio.user_id,
                     portfolio_id=order_request.portfolio_id,
                     symbol=order_request.symbol,
@@ -317,12 +323,15 @@ class OrderManager:
                 return
             import random
 
-            execution_quantity = order.quantity
-            execution_price = current_price
+            execution_quantity = Decimal(str(order.quantity))
+            execution_price = Decimal(str(current_price))
             if order.side == OrderSide.BUY:
                 execution_price *= Decimal(str(1 + random.uniform(0, 0.001)))
             else:
                 execution_price *= Decimal(str(1 - random.uniform(0, 0.001)))
+            # Quantize to the maximum allowed precision so downstream price
+            # validation (max 8 decimal places) accepts the value.
+            execution_price = execution_price.quantize(Decimal("0.00000001"))
             await self.execute_order(
                 order.id,
                 execution_quantity,
@@ -352,16 +361,18 @@ class OrderManager:
                 execution = OrderExecution(
                     order_id=order.id,
                     execution_id=execution_id,
-                    quantity=quantity,
-                    price=price,
+                    quantity=float(quantity),
+                    price=float(price),
                     executed_at=datetime.now(timezone.utc),
                     venue=venue,
-                    commission=commission,
-                    fees=fees,
+                    commission=float(commission),
+                    fees=float(fees),
                     created_by=order.user_id,
                 )
                 session.add(execution)
-                order.filled_quantity += quantity
+                order.filled_quantity = float(
+                    Decimal(str(order.filled_quantity)) + Decimal(str(quantity))
+                )
                 if order.filled_quantity >= order.quantity:
                     order.status = OrderStatus.FILLED
                     order.filled_at = datetime.now(timezone.utc)
@@ -373,31 +384,61 @@ class OrderManager:
                     .all()
                 )
                 total_value = sum(
-                    (exec.quantity * exec.price for exec in total_executions)
+                    (
+                        Decimal(str(exec.quantity)) * Decimal(str(exec.price))
+                        for exec in total_executions
+                    ),
+                    Decimal("0"),
                 )
-                total_quantity = sum((exec.quantity for exec in total_executions))
+                total_quantity = sum(
+                    (Decimal(str(exec.quantity)) for exec in total_executions),
+                    Decimal("0"),
+                )
                 if total_quantity > 0:
-                    order.avg_fill_price = total_value / total_quantity
+                    order.avg_fill_price = float(total_value / total_quantity)
                 session.commit()
                 session.refresh(execution)
-                await self._update_portfolio_position(order, execution)
+                # Capture primitives while the instance is still session-bound so
+                # the position update does not touch a detached ORM instance.
+                exec_quantity = float(execution.quantity)
+                exec_price = float(execution.price)
+                exec_commission = float(execution.commission or 0)
+                exec_fees = float(execution.fees or 0)
+                exec_id = execution.id
+                order_side = order.side
+                portfolio_id = order.portfolio_id
+                symbol = order.symbol
+                order_user_id = order.user_id
+                order_id_display = order.order_id
+                order_db_id = order.id
+                execution_dict = execution.to_dict()
+                self._update_portfolio_position(
+                    portfolio_id=portfolio_id,
+                    symbol=symbol,
+                    side=order_side,
+                    quantity=exec_quantity,
+                    price=exec_price,
+                    commission=exec_commission,
+                    fees=exec_fees,
+                    user_id=order_user_id,
+                )
                 audit_logger.log_event(
                     action=AuditAction.TRADE,
                     resource_type="order_execution",
-                    resource_id=str(execution.id),
-                    new_values=execution.to_dict(),
-                    user_id=order.user_id,
+                    resource_id=str(exec_id),
+                    new_values=execution_dict,
+                    user_id=order_user_id,
                     metadata={
-                        "order_id": order.id,
+                        "order_id": order_db_id,
                         "execution_value": float(quantity * price),
                         "commission": float(commission),
                         "fees": float(fees),
                     },
                 )
                 logger.info(
-                    f"Order executed: {order.order_id}, Quantity: {quantity}, Price: {price}"
+                    f"Order executed: {order_id_display}, Quantity: {quantity}, Price: {price}"
                 )
-                return execution
+                return execution_dict
         except Exception as e:
             logger.error(f"Error executing order: {e}")
             raise
@@ -412,35 +453,43 @@ class OrderManager:
         trade_value = quantity * price
         return trade_value * Decimal("0.0001")
 
-    async def _update_portfolio_position(self, order: Order, execution: OrderExecution):
-        """Update portfolio position after execution"""
+    def _update_portfolio_position(
+        self,
+        portfolio_id: int,
+        symbol: str,
+        side: "OrderSide",
+        quantity: float,
+        price: float,
+        commission: float,
+        fees: float,
+        user_id: int,
+    ):
+        """Update portfolio position after execution.
+
+        Operates on primitive values captured while the execution instance was
+        bound to its session, avoiding detached-instance access.
+        """
         try:
-            await portfolio_service.add_position(
-                portfolio_id=order.portfolio_id,
-                symbol=order.symbol,
-                quantity=(
-                    execution.quantity
-                    if order.side == OrderSide.BUY
-                    else -execution.quantity
-                ),
-                avg_cost=execution.price,
-                user_id=order.user_id,
+            portfolio_service.add_position(
+                portfolio_id=portfolio_id,
+                symbol=symbol,
+                quantity=(quantity if side == OrderSide.BUY else -quantity),
+                avg_cost=price,
+                user_id=user_id,
             )
             with get_db_session() as session:
                 portfolio = (
                     session.query(Portfolio)
-                    .filter(Portfolio.id == order.portfolio_id)
+                    .filter(Portfolio.id == portfolio_id)
                     .first()
                 )
                 if portfolio:
-                    trade_value = execution.quantity * execution.price
-                    total_cost = trade_value + execution.commission + execution.fees
-                    if order.side == OrderSide.BUY:
+                    trade_value = quantity * price
+                    total_cost = trade_value + commission + fees
+                    if side == OrderSide.BUY:
                         portfolio.cash_balance -= total_cost
                     else:
-                        portfolio.cash_balance += (
-                            trade_value - execution.commission - execution.fees
-                        )
+                        portfolio.cash_balance += trade_value - commission - fees
                     session.commit()
         except Exception as e:
             logger.error(f"Error updating portfolio position: {e}")

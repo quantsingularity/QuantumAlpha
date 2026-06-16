@@ -14,7 +14,6 @@ import {
   ContributionGraph,
   ProgressChart,
 } from "react-native-chart-kit";
-import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useTheme } from "../../context/ThemeContext";
 
 interface ChartDataset {
@@ -36,6 +35,8 @@ interface PieChartData {
   legendFontSize: number;
 }
 
+export type Timeframe = "1D" | "1W" | "1M" | "3M" | "1Y" | "ALL";
+
 interface ChartProps {
   type: "line" | "bar" | "pie" | "area" | "contribution" | "progress";
   data: ChartData | PieChartData[] | any;
@@ -44,8 +45,8 @@ interface ChartProps {
   height?: number;
   showLegend?: boolean;
   interactive?: boolean;
-  timeframe?: "1D" | "1W" | "1M" | "3M" | "1Y" | "ALL";
-  onTimeframeChange?: (timeframe: string) => void;
+  timeframe?: Timeframe;
+  onTimeframeChange?: (timeframe: Timeframe) => void;
   style?: any;
 }
 
@@ -65,7 +66,7 @@ const Chart: React.FC<ChartProps> = ({
   const screenWidth = Dimensions.get("window").width;
   const [selectedPoint, setSelectedPoint] = useState<any>(null);
 
-  const timeframes = ["1D", "1W", "1M", "3M", "1Y", "ALL"];
+  const timeframes: Timeframe[] = ["1D", "1W", "1M", "3M", "1Y", "ALL"];
 
   const chartConfig = {
     backgroundColor: theme.chartBackground,
@@ -192,6 +193,7 @@ const Chart: React.FC<ChartProps> = ({
             height={height}
             chartConfig={chartConfig}
             style={styles.chart}
+            tooltipDataAttrs={() => ({})}
           />
         );
 
@@ -201,7 +203,9 @@ const Chart: React.FC<ChartProps> = ({
   };
 
   const renderTimeframeSelector = () => {
-    if (!onTimeframeChange) return null;
+    if (!onTimeframeChange) {
+      return null;
+    }
 
     return (
       <ScrollView
@@ -240,7 +244,9 @@ const Chart: React.FC<ChartProps> = ({
   };
 
   const renderSelectedPoint = () => {
-    if (!selectedPoint || !interactive) return null;
+    if (!selectedPoint || !interactive) {
+      return null;
+    }
 
     return (
       <View

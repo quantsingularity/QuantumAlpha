@@ -1,14 +1,20 @@
-import asyncio
 import logging
 import os
 import signal
+import threading
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Callable, List, Optional
 
 from backend.api.config import Config
 from backend.common.audit import audit_logger, log_security_event
-from backend.common.auth import auth_manager, require_auth, require_role
+from backend.common.auth import (
+    AuthenticationError,
+    AuthorizationError,
+    auth_manager,
+    require_auth,
+    require_role,
+)
 from backend.common.database import cleanup_database, db_manager, initialize_database
 from backend.common.logging_config import setup_logging
 from backend.common.models import AuditAction
@@ -89,9 +95,10 @@ class QuantumAlphaApp:
             )
 
         @app.errorhandler(PermissionError)
+        @app.errorhandler(AuthorizationError)
         def handle_permission_error(error):
-            """Handle permission errors"""
-            logger.warning("Permission error: %s", error)
+            """Handle authorization/permission errors (insufficient privileges)"""
+            logger.warning("Authorization error: %s", error)
             log_security_event(
                 "permission_denied",
                 {
@@ -113,6 +120,21 @@ class QuantumAlphaApp:
                     }
                 ),
                 403,
+            )
+
+        @app.errorhandler(AuthenticationError)
+        def handle_authentication_error(error):
+            """Handle authentication errors (identity could not be established)"""
+            logger.warning("Authentication error: %s", error)
+            return (
+                jsonify(
+                    {
+                        "error": "Authentication failed",
+                        "message": str(error),
+                        "code": "AUTHENTICATION_FAILED",
+                    }
+                ),
+                401,
             )
 
         @app.errorhandler(404)
@@ -201,6 +223,9 @@ class QuantumAlphaApp:
         """Register Flask blueprints"""
         monitoring_bp = create_monitoring_blueprint()
         app.register_blueprint(monitoring_bp)
+        from backend.api.frontend_compat import compat_bp
+
+        app.register_blueprint(compat_bp)
         logger.info("Blueprints registered")
 
     def _register_routes(self, app: Flask) -> None:
@@ -223,8 +248,8 @@ class QuantumAlphaApp:
         def register(validated_data):
             """User registration endpoint"""
             try:
-                from common.database import get_db_session
-                from common.models import User
+                from backend.common.database import get_db_session
+                from backend.common.models import User
 
                 with get_db_session() as session:
                     existing_user = (
@@ -285,8 +310,8 @@ class QuantumAlphaApp:
         def login(validated_data):
             """User login endpoint"""
             try:
-                from common.database import get_db_session
-                from common.models import User
+                from backend.common.database import get_db_session
+                from backend.common.models import User
 
                 with get_db_session() as session:
                     user = (
@@ -300,6 +325,9 @@ class QuantumAlphaApp:
                         access_token = auth_manager.create_access_token(
                             identity=user.id, roles=user.roles
                         )
+                        refresh_token = auth_manager.create_refresh_token(
+                            identity=user.id
+                        )
                         audit_logger.log_event(
                             action=AuditAction.LOGIN,
                             resource_type="user",
@@ -311,6 +339,7 @@ class QuantumAlphaApp:
                                 {
                                     "message": "Login successful",
                                     "access_token": access_token,
+                                    "refresh_token": refresh_token,
                                     "user_id": user.id,
                                 }
                             ),
@@ -364,8 +393,8 @@ class QuantumAlphaApp:
         def get_current_user():
             """Get current user details"""
             try:
-                from common.database import get_db_session
-                from common.models import User
+                from backend.common.database import get_db_session
+                from backend.common.models import User
 
                 user_id = get_jwt_identity()
                 with get_db_session() as session:
@@ -407,7 +436,7 @@ class QuantumAlphaApp:
         def get_portfolio_summary():
             """Get user's portfolio summary"""
             try:
-                user_id = get_jwt_identity()
+                user_id = int(get_jwt_identity())
                 summary = portfolio_service.get_portfolio_summary(user_id)
                 return (jsonify(summary), 200)
             except Exception as e:
@@ -428,7 +457,7 @@ class QuantumAlphaApp:
         def get_portfolio_positions():
             """Get user's portfolio positions"""
             try:
-                user_id = get_jwt_identity()
+                user_id = int(get_jwt_identity())
                 positions = portfolio_service.get_portfolio_positions(user_id)
                 return (jsonify(positions), 200)
             except Exception as e:
@@ -450,7 +479,7 @@ class QuantumAlphaApp:
         def place_order(validated_data):
             """Place a new trade order"""
             try:
-                user_id = get_jwt_identity()
+                user_id = int(get_jwt_identity())
                 order_request = OrderRequest(
                     user_id=user_id,
                     portfolio_id=validated_data.get("portfolio_id", 0),
@@ -516,7 +545,7 @@ class QuantumAlphaApp:
         def get_orders():
             """Get user's trade orders"""
             try:
-                user_id = get_jwt_identity()
+                user_id = int(get_jwt_identity())
                 orders = trading_engine.get_orders(user_id)
                 return (jsonify(orders), 200)
             except Exception as e:
@@ -538,8 +567,8 @@ class QuantumAlphaApp:
         def get_all_users():
             """Get a list of all users (Admin only)"""
             try:
-                from common.database import get_db_session
-                from common.models import User
+                from backend.common.database import get_db_session
+                from backend.common.models import User
 
                 with get_db_session() as session:
                     users = session.query(User).all()
@@ -579,7 +608,12 @@ class QuantumAlphaApp:
                     handler()
                 os.kill(os.getpid(), signal.SIGINT)
 
-            asyncio.get_event_loop().call_later(1, shutdown_handler)
+            # Use a thread timer rather than the asyncio event loop. Request
+            # handlers run in worker threads with no running event loop, so
+            # asyncio.get_event_loop() would raise RuntimeError under gunicorn.
+            timer = threading.Timer(1.0, shutdown_handler)
+            timer.daemon = True
+            timer.start()
             return (jsonify({"message": "System shutdown initiated"}), 200)
 
         @app.route("/api/system/status", methods=["GET"])

@@ -36,7 +36,7 @@ describe("Button", () => {
   });
 
   it("shows ActivityIndicator when loading", () => {
-    const { queryByText, UNSAFE_getByType } = render(
+    const { queryByText } = render(
       <Button title="Loading" onPress={jest.fn()} loading />,
       { wrapper: Wrapper },
     );

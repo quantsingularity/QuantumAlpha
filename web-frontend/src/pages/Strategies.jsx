@@ -44,6 +44,7 @@ import {
   Edit,
   Eye,
   Pause,
+  Play,
   Plus,
   Shield,
   Upload,

@@ -33,9 +33,17 @@ VALID_STATUSES = [
 class OrderManager:
     """Order manager"""
 
-    def __init__(self, config_manager: object, db_manager: object) -> None:
+    def __init__(
+        self,
+        config_manager: object,
+        db_manager: object,
+        broker_integration: object = None,
+        execution_strategy: object = None,
+    ) -> None:
         self.config_manager = config_manager
         self.db_manager = db_manager
+        self.broker_integration = broker_integration
+        self.execution_strategy = execution_strategy
         logger.info("Order manager initialized")
 
     def create_order(self, data: Dict[str, Any]) -> Dict[str, Any]:

@@ -78,7 +78,9 @@ const MarketOverview = ({ data, loading }) => {
 
   const formatChange = (index) => {
     const pct = index.changePercent ?? index.change;
-    if (pct == null) return "";
+    if (pct == null) {
+      return "";
+    }
     const sign = pct >= 0 ? "+" : "";
     return `${sign}${Number(pct).toFixed(2)}%`;
   };

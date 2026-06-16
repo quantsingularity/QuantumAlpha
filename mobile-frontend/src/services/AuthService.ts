@@ -4,13 +4,7 @@ import DeviceInfo from "react-native-device-info";
 import api from "./api";
 import { secureStorage } from "../utils";
 import { STORAGE_KEYS, ERROR_CODES } from "../constants";
-import {
-  User,
-  LoginCredentials,
-  RegisterData,
-  ApiResponse,
-  ApiError,
-} from "../types";
+import { User, LoginCredentials, RegisterData, ApiResponse } from "../types";
 
 class AuthService {
   private biometrics: ReactNativeBiometrics;
@@ -46,7 +40,7 @@ class AuthService {
   async getBiometricType(): Promise<string | null> {
     try {
       const { biometryType } = await this.biometrics.isSensorAvailable();
-      return biometryType;
+      return biometryType ?? null;
     } catch (error) {
       console.error("Error getting biometric type:", error);
       return null;
@@ -62,7 +56,7 @@ class AuthService {
       }
 
       // Create biometric key
-      const { keysExist } = await this.biometrics.keysExist();
+      const { keysExist } = await this.biometrics.biometricKeysExist();
       if (!keysExist) {
         await this.biometrics.createKeys();
       }
@@ -470,9 +464,9 @@ class AuthService {
 
   setToken(token: string | null): void {
     if (token) {
-      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+      api.defaults.headers.common.Authorization = `Bearer ${token}`;
     } else {
-      delete api.defaults.headers.common["Authorization"];
+      delete api.defaults.headers.common.Authorization;
     }
   }
 
@@ -491,5 +485,5 @@ class AuthService {
   }
 }
 
-export const AuthService = new AuthService();
-export default AuthService;
+export const authService = new AuthService();
+export default authService;

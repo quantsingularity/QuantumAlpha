@@ -77,7 +77,7 @@ const StrategyScreen = () => {
     });
   };
 
-  const renderStrategyItem = ({ item, index }) => {
+  const StrategyItem = ({ item, index }) => {
     const itemFadeAnim = React.useRef(new Animated.Value(0)).current;
     const itemTranslateY = React.useRef(new Animated.Value(20)).current;
 
@@ -181,7 +181,7 @@ const StrategyScreen = () => {
     );
   };
 
-  const renderAvailableStrategyItem = ({ item, index }) => {
+  const AvailableStrategyItem = ({ item, index }) => {
     const itemFadeAnim = React.useRef(new Animated.Value(0)).current;
     const itemTranslateY = React.useRef(new Animated.Value(20)).current;
 
@@ -333,7 +333,9 @@ const StrategyScreen = () => {
 
       <FlatList
         data={strategies}
-        renderItem={renderStrategyItem}
+        renderItem={({ item, index }) => (
+          <StrategyItem item={item} index={index} />
+        )}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         refreshControl={
@@ -370,9 +372,13 @@ const StrategyScreen = () => {
               </Text>
             </Animated.View>
 
-            {availableStrategies.map((item, index) =>
-              renderAvailableStrategyItem({ item, index }),
-            )}
+            {availableStrategies.map((item, index) => (
+              <AvailableStrategyItem
+                key={item.id ?? index}
+                item={item}
+                index={index}
+              />
+            ))}
 
             <View style={styles.footer} />
           </>

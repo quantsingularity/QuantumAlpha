@@ -1,11 +1,17 @@
 import React from "react";
-import { View, StyleSheet, TouchableOpacity, ViewStyle } from "react-native";
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  ViewStyle,
+  StyleProp,
+} from "react-native";
 import * as Animatable from "react-native-animatable";
 import { useTheme } from "../../context/ThemeContext";
 
 interface CardProps {
   children: React.ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   onPress?: () => void;
   variant?: "default" | "elevated" | "outlined" | "filled";
   padding?: "none" | "small" | "medium" | "large";
@@ -94,7 +100,7 @@ const Card: React.FC<CardProps> = ({
     style,
   ];
 
-  const CardComponent = onPress ? TouchableOpacity : View;
+  const CardComponent: React.ElementType = onPress ? TouchableOpacity : View;
 
   const cardContent = (
     <CardComponent

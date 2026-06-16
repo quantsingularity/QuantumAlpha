@@ -9,6 +9,7 @@ import { store } from "./store";
 import { createAppTheme } from "./theme";
 
 // Bridge between Redux themeSlice and MUI ThemeProvider
+// eslint-disable-next-line react-refresh/only-export-components
 const ThemedApp = () => {
   const { darkMode, primaryColor } = useSelector((state) => state.theme);
   const theme = createAppTheme(darkMode, primaryColor);

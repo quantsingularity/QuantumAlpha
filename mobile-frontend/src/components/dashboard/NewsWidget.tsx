@@ -5,11 +5,10 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Image,
 } from "react-native";
-import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useNavigation } from "@react-navigation/native";
 import FastImage from "react-native-fast-image";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 
 import { useTheme } from "../../context/ThemeContext";
 import Card from "../ui/Card";
@@ -24,15 +23,15 @@ interface NewsWidgetProps {
 }
 
 const NewsWidget: React.FC<NewsWidgetProps> = ({ data, loading }) => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const { theme } = useTheme();
 
   const handleNewsPress = (article: NewsArticle) => {
-    navigation.navigate("NewsDetail" as never, { article } as never);
+    navigation.navigate("NewsDetail", { article });
   };
 
   const handleSeeAllPress = () => {
-    navigation.navigate("News" as never);
+    navigation.navigate("News");
   };
 
   const getSentimentColor = (sentiment?: string) => {

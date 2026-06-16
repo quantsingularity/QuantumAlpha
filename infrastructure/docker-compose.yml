@@ -196,10 +196,50 @@ services:
 
   # ── Application Services ────────────────────────────────────────────────────
 
+  api:
+    build:
+      context: ../code
+      dockerfile: Dockerfile.service
+      args:
+        APP_MODULE: backend.api.wsgi:application
+    image: quantumalpha/api:local
+    container_name: quantumalpha-api
+    restart: unless-stopped
+    <<: *app-security
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://quantumalpha@postgres:5432/quantumalpha
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: quantumalpha
+      POSTGRES_USER: quantumalpha
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      LOG_LEVEL: INFO
+      AUDIT_ENABLED: "true"
+      CORS_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000"
+    env_file:
+      - .env.local
+    tmpfs:
+      - /tmp
+    networks:
+      - backend
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      <<: *common-healthcheck
+
   data-service:
     build:
-      context: ./docker/data-service
-      dockerfile: Dockerfile
+      context: ../code
+      dockerfile: Dockerfile.service
+      args:
+        APP_MODULE: backend.data_service.app:app
     image: quantumalpha/data-service:local
     container_name: quantumalpha-data-service
     restart: unless-stopped
@@ -237,8 +277,10 @@ services:
 
   ai-engine:
     build:
-      context: ./docker/ai-engine
-      dockerfile: Dockerfile
+      context: ../code
+      dockerfile: Dockerfile.service
+      args:
+        APP_MODULE: ai_models.engine.app:app
     image: quantumalpha/ai-engine:local
     container_name: quantumalpha-ai-engine
     restart: unless-stopped
@@ -273,8 +315,10 @@ services:
 
   risk-service:
     build:
-      context: ./docker/risk-service
-      dockerfile: Dockerfile
+      context: ../code
+      dockerfile: Dockerfile.service
+      args:
+        APP_MODULE: backend.risk_service.app:app
     image: quantumalpha/risk-service:local
     container_name: quantumalpha-risk-service
     restart: unless-stopped
@@ -311,8 +355,10 @@ services:
 
   execution-service:
     build:
-      context: ./docker/execution-service
-      dockerfile: Dockerfile
+      context: ../code
+      dockerfile: Dockerfile.service
+      args:
+        APP_MODULE: backend.execution_service.app:app
     image: quantumalpha/execution-service:local
     container_name: quantumalpha-execution-service
     restart: unless-stopped
@@ -348,16 +394,18 @@ services:
 
   web-frontend:
     build:
-      context: ./docker/web-frontend
+      context: ../web-frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8080/api
     image: quantumalpha/web-frontend:local
     container_name: quantumalpha-web-frontend
     restart: unless-stopped
     depends_on:
-      data-service:
+      api:
         condition: service_healthy
     environment:
-      API_BASE_URL: http://data-service:8080
+      API_BASE_URL: http://api:8080
     networks:
       - frontend
       - backend

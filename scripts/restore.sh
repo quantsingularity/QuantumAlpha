@@ -182,6 +182,7 @@ RESTORE_PATH="$TEMP_DIR/$EXTRACTED_TIMESTAMP"
 
 # Load environment variables
 if [[ -f "$PROJECT_ROOT/config/.env.$ENV" ]]; then
+  # shellcheck source=/dev/null
   source "$PROJECT_ROOT/config/.env.$ENV"
   echo -e "${GREEN}✓ Loaded environment variables from .env.$ENV${NC}"
 else

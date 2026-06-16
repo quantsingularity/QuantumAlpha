@@ -37,7 +37,7 @@ import {
   TrendingUp,
   Zap,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const NewsFeed = () => {
   const [newsItems, setNewsItems] = useState([]);
@@ -64,128 +64,132 @@ const NewsFeed = () => {
   ];
 
   // Mock news data
-  const mockNews = [
-    {
-      id: 1,
-      title: "Apple Reports Record Q4 Earnings, Beats Wall Street Expectations",
-      summary:
-        "Apple Inc. reported quarterly earnings that exceeded analyst expectations, driven by strong iPhone sales and services revenue growth.",
-      content:
-        "Apple Inc. (AAPL) announced its fourth-quarter financial results today, reporting revenue of $89.5 billion, up 8% year-over-year...",
-      source: "Financial Times",
-      author: "Sarah Johnson",
-      publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      category: "Earnings",
-      imageUrl:
-        "https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=400&h=200&fit=crop",
-      sentiment: "positive",
-      views: 15420,
-      likes: 342,
-      comments: 89,
-      tags: ["AAPL", "Earnings", "Technology"],
-      readTime: "3 min read",
-    },
-    {
-      id: 2,
-      title: "Federal Reserve Signals Potential Rate Cut in December Meeting",
-      summary:
-        "Fed officials hint at possible interest rate reduction following recent inflation data showing continued cooling.",
-      content:
-        "The Federal Reserve indicated today that a rate cut may be on the table for the December FOMC meeting...",
-      source: "Reuters",
-      author: "Michael Chen",
-      publishedAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
-      category: "Economy",
-      imageUrl:
-        "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&h=200&fit=crop",
-      sentiment: "neutral",
-      views: 23150,
-      likes: 567,
-      comments: 234,
-      tags: ["Fed", "Interest Rates", "Economy"],
-      readTime: "5 min read",
-    },
-    {
-      id: 3,
-      title: "Tesla Stock Surges 12% on Autonomous Vehicle Breakthrough",
-      summary:
-        "Tesla shares jumped after the company announced significant progress in its Full Self-Driving technology.",
-      content:
-        "Tesla Inc. (TSLA) shares soared in after-hours trading following the companys announcement of a major breakthrough...",
-      source: "Bloomberg",
-      author: "David Rodriguez",
-      publishedAt: new Date(Date.now() - 6 * 60 * 60 * 1000),
-      category: "Technology",
-      imageUrl:
-        "https://images.unsplash.com/photo-1560958089-b8a1929cea89?w=400&h=200&fit=crop",
-      sentiment: "positive",
-      views: 31240,
-      likes: 892,
-      comments: 156,
-      tags: ["TSLA", "Autonomous Vehicles", "Technology"],
-      readTime: "4 min read",
-    },
-    {
-      id: 4,
-      title: "Bitcoin Reaches New All-Time High Above $75,000",
-      summary:
-        "Cryptocurrency markets rally as Bitcoin breaks previous records amid institutional adoption.",
-      content:
-        "Bitcoin (BTC) reached a new all-time high of $75,234 today, surpassing its previous record set in 2021...",
-      source: "CoinDesk",
-      author: "Emma Thompson",
-      publishedAt: new Date(Date.now() - 8 * 60 * 60 * 1000),
-      category: "Crypto",
-      imageUrl:
-        "https://images.unsplash.com/photo-1518544866330-4e4815de2e3c?w=400&h=200&fit=crop",
-      sentiment: "positive",
-      views: 45670,
-      likes: 1234,
-      comments: 445,
-      tags: ["Bitcoin", "Cryptocurrency", "ATH"],
-      readTime: "2 min read",
-    },
-    {
-      id: 5,
-      title: "Global Markets Mixed as Investors Await Inflation Data",
-      summary:
-        "Stock markets show mixed performance ahead of key inflation reports from major economies.",
-      content:
-        "Global equity markets displayed mixed performance today as investors positioned themselves ahead of crucial inflation data...",
-      source: "Wall Street Journal",
-      author: "Robert Kim",
-      publishedAt: new Date(Date.now() - 12 * 60 * 60 * 1000),
-      category: "Markets",
-      imageUrl:
-        "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&h=200&fit=crop",
-      sentiment: "neutral",
-      views: 18930,
-      likes: 234,
-      comments: 67,
-      tags: ["Markets", "Inflation", "Global"],
-      readTime: "6 min read",
-    },
-    {
-      id: 6,
-      title: "NVIDIA Announces Next-Generation AI Chips for Data Centers",
-      summary:
-        "NVIDIA unveils new GPU architecture promising 10x performance improvement for AI workloads.",
-      content:
-        "NVIDIA Corporation (NVDA) today announced its next-generation GPU architecture designed specifically for AI and machine learning...",
-      source: "TechCrunch",
-      author: "Lisa Wang",
-      publishedAt: new Date(Date.now() - 18 * 60 * 60 * 1000),
-      category: "Technology",
-      imageUrl:
-        "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=400&h=200&fit=crop",
-      sentiment: "positive",
-      views: 27840,
-      likes: 678,
-      comments: 123,
-      tags: ["NVDA", "AI", "Technology"],
-      readTime: "4 min read",
-    },
-  ];
+  const mockNews = useMemo(
+    () => [
+      {
+        id: 1,
+        title:
+          "Apple Reports Record Q4 Earnings, Beats Wall Street Expectations",
+        summary:
+          "Apple Inc. reported quarterly earnings that exceeded analyst expectations, driven by strong iPhone sales and services revenue growth.",
+        content:
+          "Apple Inc. (AAPL) announced its fourth-quarter financial results today, reporting revenue of $89.5 billion, up 8% year-over-year...",
+        source: "Financial Times",
+        author: "Sarah Johnson",
+        publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        category: "Earnings",
+        imageUrl:
+          "https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=400&h=200&fit=crop",
+        sentiment: "positive",
+        views: 15420,
+        likes: 342,
+        comments: 89,
+        tags: ["AAPL", "Earnings", "Technology"],
+        readTime: "3 min read",
+      },
+      {
+        id: 2,
+        title: "Federal Reserve Signals Potential Rate Cut in December Meeting",
+        summary:
+          "Fed officials hint at possible interest rate reduction following recent inflation data showing continued cooling.",
+        content:
+          "The Federal Reserve indicated today that a rate cut may be on the table for the December FOMC meeting...",
+        source: "Reuters",
+        author: "Michael Chen",
+        publishedAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
+        category: "Economy",
+        imageUrl:
+          "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&h=200&fit=crop",
+        sentiment: "neutral",
+        views: 23150,
+        likes: 567,
+        comments: 234,
+        tags: ["Fed", "Interest Rates", "Economy"],
+        readTime: "5 min read",
+      },
+      {
+        id: 3,
+        title: "Tesla Stock Surges 12% on Autonomous Vehicle Breakthrough",
+        summary:
+          "Tesla shares jumped after the company announced significant progress in its Full Self-Driving technology.",
+        content:
+          "Tesla Inc. (TSLA) shares soared in after-hours trading following the companys announcement of a major breakthrough...",
+        source: "Bloomberg",
+        author: "David Rodriguez",
+        publishedAt: new Date(Date.now() - 6 * 60 * 60 * 1000),
+        category: "Technology",
+        imageUrl:
+          "https://images.unsplash.com/photo-1560958089-b8a1929cea89?w=400&h=200&fit=crop",
+        sentiment: "positive",
+        views: 31240,
+        likes: 892,
+        comments: 156,
+        tags: ["TSLA", "Autonomous Vehicles", "Technology"],
+        readTime: "4 min read",
+      },
+      {
+        id: 4,
+        title: "Bitcoin Reaches New All-Time High Above $75,000",
+        summary:
+          "Cryptocurrency markets rally as Bitcoin breaks previous records amid institutional adoption.",
+        content:
+          "Bitcoin (BTC) reached a new all-time high of $75,234 today, surpassing its previous record set in 2021...",
+        source: "CoinDesk",
+        author: "Emma Thompson",
+        publishedAt: new Date(Date.now() - 8 * 60 * 60 * 1000),
+        category: "Crypto",
+        imageUrl:
+          "https://images.unsplash.com/photo-1518544866330-4e4815de2e3c?w=400&h=200&fit=crop",
+        sentiment: "positive",
+        views: 45670,
+        likes: 1234,
+        comments: 445,
+        tags: ["Bitcoin", "Cryptocurrency", "ATH"],
+        readTime: "2 min read",
+      },
+      {
+        id: 5,
+        title: "Global Markets Mixed as Investors Await Inflation Data",
+        summary:
+          "Stock markets show mixed performance ahead of key inflation reports from major economies.",
+        content:
+          "Global equity markets displayed mixed performance today as investors positioned themselves ahead of crucial inflation data...",
+        source: "Wall Street Journal",
+        author: "Robert Kim",
+        publishedAt: new Date(Date.now() - 12 * 60 * 60 * 1000),
+        category: "Markets",
+        imageUrl:
+          "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&h=200&fit=crop",
+        sentiment: "neutral",
+        views: 18930,
+        likes: 234,
+        comments: 67,
+        tags: ["Markets", "Inflation", "Global"],
+        readTime: "6 min read",
+      },
+      {
+        id: 6,
+        title: "NVIDIA Announces Next-Generation AI Chips for Data Centers",
+        summary:
+          "NVIDIA unveils new GPU architecture promising 10x performance improvement for AI workloads.",
+        content:
+          "NVIDIA Corporation (NVDA) today announced its next-generation GPU architecture designed specifically for AI and machine learning...",
+        source: "TechCrunch",
+        author: "Lisa Wang",
+        publishedAt: new Date(Date.now() - 18 * 60 * 60 * 1000),
+        category: "Technology",
+        imageUrl:
+          "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=400&h=200&fit=crop",
+        sentiment: "positive",
+        views: 27840,
+        likes: 678,
+        comments: 123,
+        tags: ["NVDA", "AI", "Technology"],
+        readTime: "4 min read",
+      },
+    ],
+    [],
+  );
 
   useEffect(() => {
     // Simulate loading news

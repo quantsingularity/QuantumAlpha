@@ -106,6 +106,7 @@ echo -e "${GREEN}✓ Created backup directory: $BACKUP_PATH${NC}"
 
 # Load environment variables
 if [[ -f "$PROJECT_ROOT/config/.env.$ENV" ]]; then
+  # shellcheck source=/dev/null
   source "$PROJECT_ROOT/config/.env.$ENV"
   echo -e "${GREEN}✓ Loaded environment variables from .env.$ENV${NC}"
 else

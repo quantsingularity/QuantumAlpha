@@ -6,11 +6,33 @@ from typing import List
 
 import structlog
 from cryptography.fernet import Fernet
-from sqlalchemy import JSON, Boolean, CheckConstraint, Column, DateTime
+from sqlalchemy import DDL, JSON, Boolean, CheckConstraint, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import (
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    event,
+)
+from sqlalchemy.dialects.postgresql import JSONB as _PG_JSONB
+from sqlalchemy.dialects.postgresql import UUID as _PG_UUID
 from sqlalchemy.orm import declarative_base, relationship, validates
+
+# Portable column types. On PostgreSQL these use the native JSONB and UUID
+# types; on other backends (notably SQLite, used as the local/test fallback)
+# they degrade to JSON and CHAR(36) so that schema creation succeeds. This lets
+# the documented SQLite fallback in database.py actually create the schema.
+JSONB = _PG_JSONB().with_variant(JSON(), "sqlite")
+
+
+def UUID(as_uuid: bool = True):
+    """PostgreSQL UUID that degrades to CHAR(36) on SQLite."""
+    return _PG_UUID(as_uuid=as_uuid).with_variant(String(36), "sqlite")
+
 
 logger = structlog.get_logger(__name__)
 Base = declarative_base()
@@ -127,18 +149,26 @@ class User(BaseModel):
     terms_accepted_at = Column(DateTime(timezone=True), nullable=True)
     privacy_policy_accepted_at = Column(DateTime(timezone=True), nullable=True)
     sessions = relationship(
-        "UserSession", back_populates="user", cascade="all, delete-orphan"
+        "UserSession",
+        foreign_keys="UserSession.user_id",
+        back_populates="user",
+        cascade="all, delete-orphan",
     )
     audit_logs = relationship(
         "AuditLog", foreign_keys="AuditLog.user_id", back_populates="user"
     )
-    portfolios = relationship("Portfolio", back_populates="user")
-    orders = relationship("Order", back_populates="user")
+    portfolios = relationship(
+        "Portfolio", foreign_keys="Portfolio.user_id", back_populates="user"
+    )
+    orders = relationship("Order", foreign_keys="Order.user_id", back_populates="user")
     __table_args__ = (
-        CheckConstraint(
-            "email ~ '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$'",
-            name="valid_email",
-        ),
+        # NOTE: the email-format regex constraint is enforced at the database
+        # level on PostgreSQL via a dialect-guarded DDL statement attached after
+        # this class (see add_postgres_email_check below). It is intentionally
+        # not declared inline here because the "~" regex operator is
+        # PostgreSQL-specific and would break table creation on SQLite, which is
+        # used as the local/test fallback. Application-level validation is
+        # always enforced by the validate_email validator below.
         Index("idx_user_email_active", "email", "is_active"),
     )
 
@@ -231,6 +261,21 @@ class User(BaseModel):
         return cipher_suite.decrypt(encrypted_data.encode()).decode()
 
 
+# Enforce the email-format regex at the database level on PostgreSQL only.
+# The "~" regex operator is PostgreSQL-specific; guarding the DDL by dialect
+# keeps the constraint in production while allowing SQLite (the local/test
+# fallback) to create the schema without error.
+_USER_EMAIL_CHECK_DDL = DDL(
+    "ALTER TABLE users ADD CONSTRAINT valid_email "
+    "CHECK (email ~ '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$')"
+)
+event.listen(
+    User.__table__,
+    "after_create",
+    _USER_EMAIL_CHECK_DDL.execute_if(dialect="postgresql"),
+)
+
+
 class UserSession(BaseModel):
     """User session tracking for security"""
 
@@ -244,7 +289,7 @@ class UserSession(BaseModel):
     last_activity = Column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
-    user = relationship("User", back_populates="sessions")
+    user = relationship("User", foreign_keys=[user_id], back_populates="sessions")
     __table_args__ = (
         Index("idx_session_user_active", "user_id", "is_active"),
         Index("idx_session_expires", "expires_at"),
@@ -297,7 +342,7 @@ class Portfolio(BaseModel):
     max_sector_exposure = Column(Float, nullable=True)
     max_leverage = Column(Float, nullable=True, default=1.0)
     is_active = Column(Boolean, default=True, nullable=False)
-    user = relationship("User", back_populates="portfolios")
+    user = relationship("User", foreign_keys=[user_id], back_populates="portfolios")
     positions = relationship(
         "Position", back_populates="portfolio", cascade="all, delete-orphan"
     )
@@ -364,7 +409,7 @@ class Order(BaseModel):
     commission = Column(Float, nullable=True)
     fees = Column(Float, nullable=True)
     execution_venue = Column(String(100), nullable=True)
-    user = relationship("User", back_populates="orders")
+    user = relationship("User", foreign_keys=[user_id], back_populates="orders")
     portfolio = relationship("Portfolio", back_populates="orders")
     executions = relationship(
         "OrderExecution", back_populates="order", cascade="all, delete-orphan"

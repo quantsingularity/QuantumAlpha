@@ -79,7 +79,7 @@ class AlertService {
         }, 800);
       });
 
-      return response.data;
+      return response.data.slice(0, limit);
     } catch (error) {
       console.error("Error fetching alerts:", error);
       throw new Error(

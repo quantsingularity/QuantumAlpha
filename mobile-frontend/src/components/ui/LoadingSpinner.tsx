@@ -47,7 +47,7 @@ export const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
   style,
   children,
 }) => {
-  const { theme, isDarkMode } = useTheme();
+  const { isDarkMode } = useTheme();
 
   const renderSkeleton = () => {
     const items = [];

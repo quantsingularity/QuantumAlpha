@@ -188,6 +188,7 @@ const LoginScreen = () => {
         </View>
 
         <TouchableOpacity
+          testID="login-button"
           style={[styles.loginButton, { backgroundColor: theme.primary }]}
           onPress={handleLogin}
           disabled={loading}

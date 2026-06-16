@@ -1,5 +1,5 @@
 import React from "react";
-import { render, act, waitFor } from "@testing-library/react-native";
+import { render, waitFor } from "@testing-library/react-native";
 import { Text } from "react-native";
 import { AuthProvider, useAuth } from "../../src/context/AuthContext";
 

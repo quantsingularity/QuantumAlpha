@@ -23,12 +23,67 @@ from .database import get_db_session
 from .models import User, UserSession
 
 logger = structlog.get_logger(__name__)
-redis_client = redis.Redis(
-    host=os.getenv("REDIS_HOST", "localhost"),
-    port=int(os.getenv("REDIS_PORT", 6379)),
-    db=int(os.getenv("REDIS_AUTH_DB", 1)),
-    decode_responses=True,
-)
+
+
+def _get_blocklist_client():
+    """Return a usable Redis-like client for auth state.
+
+    Prefers the shared DatabaseManager client (which itself falls back to
+    fakeredis when no real Redis is reachable). Falls back to a direct
+    connection, then to fakeredis, and finally returns None if nothing is
+    available. Callers must tolerate a None return value.
+    """
+    # 1. Shared DatabaseManager client (real Redis or fakeredis fallback).
+    try:
+        from .database import db_manager
+
+        client = db_manager.get_redis_client()
+        if client is not None:
+            return client
+    except Exception:  # pragma: no cover - defensive
+        pass
+
+    # 2. Direct connection to a configured Redis instance.
+    try:
+        client = redis.Redis(
+            host=os.getenv("REDIS_HOST", "localhost"),
+            port=int(os.getenv("REDIS_PORT", 6379)),
+            db=int(os.getenv("REDIS_AUTH_DB", 1)),
+            decode_responses=True,
+            socket_connect_timeout=2,
+        )
+        client.ping()
+        return client
+    except Exception:  # pragma: no cover - defensive
+        pass
+
+    # 3. In-memory fakeredis so single-process/dev flows still function.
+    try:
+        import fakeredis
+
+        return fakeredis.FakeRedis(decode_responses=True)
+    except Exception:  # pragma: no cover - defensive
+        return None
+
+
+class _RedisProxy:
+    """Lazy, resilient proxy used by auth helpers.
+
+    Resolves the underlying client on each access via _get_blocklist_client so
+    that a Redis outage never raises at import time and degrades gracefully at
+    call time.
+    """
+
+    def __getattr__(self, name):
+        client = _get_blocklist_client()
+        if client is None:
+            raise AuthenticationError("Auth state store unavailable")
+        return getattr(client, name)
+
+
+# Backwards-compatible module-level handle. Existing call sites keep working,
+# but the connection is now lazy and resilient instead of eager.
+redis_client = _RedisProxy()
 
 
 class AuthenticationError(Exception):
@@ -84,9 +139,29 @@ class AuthManager:
 
         @self.jwt.token_in_blocklist_loader
         def check_if_token_revoked(jwt_header, jwt_payload):
-            """Check if token is blacklisted"""
-            jti = jwt_payload["jti"]
-            return redis_client.get(f"blacklist:{jti}") is not None
+            """Check if token is blacklisted.
+
+            Resolves the Redis client through the shared DatabaseManager, which
+            falls back to fakeredis when no real Redis is reachable. If the
+            blocklist store cannot be queried at all, the check fails open
+            (token treated as not revoked) so that a Redis outage does not take
+            down every authenticated endpoint. The outage is logged so it is
+            visible in monitoring.
+            """
+            jti = jwt_payload.get("jti")
+            if not jti:
+                return False
+            try:
+                client = _get_blocklist_client()
+                if client is None:
+                    return False
+                return client.get(f"blacklist:{jti}") is not None
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning(
+                    "Token blocklist check unavailable; failing open",
+                    error=str(exc),
+                )
+                return False
 
         @self.jwt.expired_token_loader
         def expired_token_callback(jwt_header, jwt_payload):
@@ -116,13 +191,25 @@ class AuthManager:
     def create_access_token(
         self, identity: str, roles: Optional[List[str]] = None
     ) -> str:
-        """Create a JWT access token for the given identity"""
+        """Create a JWT access token for the given identity.
+
+        The identity is cast to a string because the JWT "sub" claim must be a
+        string; passing an integer user id causes token validation to fail.
+        """
         additional_claims: Dict[str, Any] = {}
         if roles is not None:
             additional_claims["roles"] = roles if isinstance(roles, list) else [roles]
         return create_access_token(
-            identity=identity, additional_claims=additional_claims
+            identity=str(identity), additional_claims=additional_claims
         )
+
+    def create_refresh_token(self, identity: str) -> str:
+        """Create a JWT refresh token for the given identity.
+
+        The identity is cast to a string for the same reason as the access
+        token: the JWT "sub" claim must be a string.
+        """
+        return create_refresh_token(identity=str(identity))
 
     def verify_password(self, password: str, hashed: str) -> bool:
         """Verify password against hash"""
@@ -189,9 +276,9 @@ class AuthManager:
             "session_id": secrets.token_urlsafe(16),
         }
         access_token = create_access_token(
-            identity=user.id, additional_claims=additional_claims
+            identity=str(user.id), additional_claims=additional_claims
         )
-        refresh_token = create_refresh_token(identity=user.id)
+        refresh_token = create_refresh_token(identity=str(user.id))
         session = UserSession(
             user_id=user.id,
             session_id=additional_claims["session_id"],
@@ -347,14 +434,19 @@ def require_role(
         @jwt_required()
         def decorated_function(*args: object, **kwargs: object) -> object:
             claims = get_jwt()
-            user_role = claims.get("role")
-            if user_role != required_role:
+            # Tokens carry a "roles" list claim (see AuthManager.create_access_token
+            # and User.roles). Support a legacy singular "role" claim as a fallback.
+            user_roles = claims.get("roles")
+            if user_roles is None:
+                legacy = claims.get("role")
+                user_roles = [legacy] if legacy else []
+            if required_role not in user_roles:
                 log_security_event(
                     "authorization_failed",
                     {
                         "user_id": get_jwt_identity(),
                         "required_role": required_role,
-                        "user_role": user_role,
+                        "user_roles": user_roles,
                     },
                 )
                 raise AuthorizationError(f"Role '{required_role}' required")

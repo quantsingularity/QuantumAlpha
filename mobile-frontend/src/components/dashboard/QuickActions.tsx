@@ -1,11 +1,5 @@
 import React from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-} from "react-native";
+import { View, Text, StyleSheet, ScrollView } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useNavigation } from "@react-navigation/native";
 import HapticFeedback from "react-native-haptic-feedback";
@@ -24,7 +18,7 @@ interface QuickAction {
 }
 
 const QuickActions: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const { theme } = useTheme();
 
   const quickActions: QuickAction[] = [
@@ -74,7 +68,7 @@ const QuickActions: React.FC = () => {
 
   const handleActionPress = (action: QuickAction) => {
     HapticFeedback.trigger("impactLight");
-    navigation.navigate(action.route as never, action.params as never);
+    navigation.navigate(action.route, action.params);
   };
 
   return (

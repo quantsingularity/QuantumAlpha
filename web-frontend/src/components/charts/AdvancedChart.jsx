@@ -14,6 +14,7 @@ import {
   Typography,
 } from "@mui/material";
 import {
+  Activity,
   BarChart3,
   Download,
   Eye,

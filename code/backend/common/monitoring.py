@@ -87,9 +87,26 @@ class Alert:
 
 
 class MetricsCollector:
-    """Prometheus metrics collector"""
+    """Prometheus metrics collector.
+
+    Implemented as a process-wide singleton. Prometheus raises a "Duplicated
+    timeseries" error if the same metric names are registered against the
+    default registry more than once, which happens when MetricsCollector is
+    constructed at multiple sites (MonitoringService and SystemMonitor). The
+    singleton ensures the metrics are registered exactly once.
+    """
+
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
 
     def __init__(self) -> None:
+        if getattr(self, "_initialized", False):
+            return
+        self._initialized = True
         self.request_count = Counter(
             "http_requests_total",
             "Total HTTP requests",
@@ -535,7 +552,7 @@ def create_monitoring_blueprint() -> None:
     async def health_endpoint():
         """Health check endpoint"""
         try:
-            health_status = await monitoring_service.get_health_status()
+            health_status = await get_monitoring_service().get_health_status()
             status_code = 200 if health_status["status"] == "healthy" else 503
             return (jsonify(health_status), status_code)
         except Exception as e:
@@ -555,7 +572,7 @@ def create_monitoring_blueprint() -> None:
     def metrics_endpoint():
         """Prometheus metrics endpoint"""
         try:
-            metrics = monitoring_service.get_metrics()
+            metrics = get_monitoring_service().get_metrics()
             return (metrics, 200, {"Content-Type": CONTENT_TYPE_LATEST})
         except Exception as e:
             logger.error(f"Metrics endpoint error: {e}")
@@ -565,7 +582,9 @@ def create_monitoring_blueprint() -> None:
     def status_endpoint():
         """Detailed status endpoint"""
         try:
-            system_metrics = monitoring_service.system_monitor.collect_system_metrics()
+            system_metrics = (
+                get_monitoring_service().system_monitor.collect_system_metrics()
+            )
             db_stats = db_manager.get_connection_stats()
             with get_db_session() as session:
                 user_count = session.query(User).count()
@@ -602,7 +621,7 @@ def create_request_monitoring_middleware() -> None:
         try:
             if hasattr(request, "start_time"):
                 duration = time.time() - request.start_time
-                monitoring_service.metrics_collector.record_request(
+                get_monitoring_service().metrics_collector.record_request(
                     method=request.method,
                     endpoint=request.endpoint or "unknown",
                     status=response.status_code,

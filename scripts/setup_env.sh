@@ -99,6 +99,7 @@ else
 fi
 
 # Activate virtual environment
+# shellcheck source=/dev/null
 source "$PROJECT_ROOT/venv/bin/activate"
 echo -e "${GREEN}✓ Activated virtual environment${NC}"
 

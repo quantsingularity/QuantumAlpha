@@ -1,8 +1,12 @@
 // API Configuration
+// In development the backend is served at http://localhost:8080/api (use
+// http://10.0.2.2:8080/api for the Android emulator). The production host
+// should be set here when a deployed API is available. This is kept consistent
+// with services/api.js so there is a single source of truth for the base URL.
 export const API_CONFIG = {
   BASE_URL: __DEV__
-    ? "https://api-dev.quantumalpha.com/v1"
-    : "https://api.quantumalpha.com/v1",
+    ? "http://localhost:8080/api"
+    : "https://api.quantumalpha.com/api",
   TIMEOUT: 10000,
   RETRY_ATTEMPTS: 3,
   RETRY_DELAY: 1000,

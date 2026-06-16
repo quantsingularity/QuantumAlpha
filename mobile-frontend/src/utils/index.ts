@@ -108,7 +108,9 @@ export const capitalize = (str: string): string => {
 };
 
 export const truncateText = (text: string, maxLength: number): string => {
-  if (text.length <= maxLength) return text;
+  if (text.length <= maxLength) {
+    return text;
+  }
   return text.substring(0, maxLength - 3) + "...";
 };
 
@@ -185,8 +187,12 @@ export const sortBy = <T>(
     const aVal = a[key];
     const bVal = b[key];
 
-    if (aVal < bVal) return direction === "asc" ? -1 : 1;
-    if (aVal > bVal) return direction === "asc" ? 1 : -1;
+    if (aVal < bVal) {
+      return direction === "asc" ? -1 : 1;
+    }
+    if (aVal > bVal) {
+      return direction === "asc" ? 1 : -1;
+    }
     return 0;
   });
 };

@@ -32,14 +32,16 @@ describe("LoginScreen", () => {
   });
 
   it("renders Sign In button", () => {
-    const { getByText } = render(<LoginScreen />, { wrapper: Wrapper });
-    expect(getByText("Sign In")).toBeTruthy();
+    const { getByTestId } = render(<LoginScreen />, { wrapper: Wrapper });
+    expect(getByTestId("login-button")).toBeTruthy();
   });
 
   it("shows error when email is empty", async () => {
-    const { getByText } = render(<LoginScreen />, { wrapper: Wrapper });
+    const { getByTestId, getByText } = render(<LoginScreen />, {
+      wrapper: Wrapper,
+    });
 
-    fireEvent.press(getByText("Sign In"));
+    fireEvent.press(getByTestId("login-button"));
 
     await waitFor(() => {
       expect(getByText("Email and password are required")).toBeTruthy();
@@ -47,12 +49,15 @@ describe("LoginScreen", () => {
   });
 
   it("shows error when password is empty", async () => {
-    const { getByPlaceholderText, getByText } = render(<LoginScreen />, {
-      wrapper: Wrapper,
-    });
+    const { getByPlaceholderText, getByTestId, getByText } = render(
+      <LoginScreen />,
+      {
+        wrapper: Wrapper,
+      },
+    );
 
     fireEvent.changeText(getByPlaceholderText("Email"), "user@example.com");
-    fireEvent.press(getByText("Sign In"));
+    fireEvent.press(getByTestId("login-button"));
 
     await waitFor(() => {
       expect(getByText("Email and password are required")).toBeTruthy();

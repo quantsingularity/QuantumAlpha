@@ -281,19 +281,19 @@ class UserRegistrationSchema(BaseSchema):
     terms_accepted = fields.Bool(required=True)
 
     @validates("email")
-    def validate_email_security(self, value: object) -> None:
+    def validate_email_security(self, value: object, **kwargs) -> None:
         return UserValidator.validate_email(value)
 
     @validates("password")
-    def validate_password_strength(self, value: object) -> None:
+    def validate_password_strength(self, value: object, **kwargs) -> None:
         return UserValidator.validate_password(value)
 
     @validates("name")
-    def validate_name_format(self, value: object) -> None:
+    def validate_name_format(self, value: object, **kwargs) -> None:
         return UserValidator.validate_name(value)
 
     @validates("terms_accepted")
-    def validate_terms(self, value: object) -> None:
+    def validate_terms(self, value: object, **kwargs) -> None:
         if not value:
             raise MarshmallowValidationError("Terms and conditions must be accepted")
 
@@ -307,13 +307,14 @@ class UserLoginSchema(BaseSchema):
     remember_me = fields.Bool(required=False, load_default=False)
 
     @validates("email")
-    def validate_email_format(self, value: object) -> None:
+    def validate_email_format(self, value: object, **kwargs) -> None:
         return UserValidator.validate_email(value)
 
 
 class OrderSchema(BaseSchema):
     """Order validation schema"""
 
+    portfolio_id = fields.Int(required=True, validate=validate.Range(min=1))
     symbol = fields.Str(required=True, validate=validate.Length(min=1, max=10))
     side = fields.Str(required=True, validate=validate.OneOf(["buy", "sell"]))
     order_type = fields.Str(
@@ -330,20 +331,20 @@ class OrderSchema(BaseSchema):
     )
 
     @validates("symbol")
-    def validate_symbol_format(self, value: object) -> None:
+    def validate_symbol_format(self, value: object, **kwargs) -> None:
         return FinancialValidator.validate_symbol(value)
 
     @validates("quantity")
-    def validate_quantity_value(self, value: object) -> None:
+    def validate_quantity_value(self, value: object, **kwargs) -> None:
         return FinancialValidator.validate_quantity(value)
 
     @validates("price")
-    def validate_price_value(self, value: object) -> None:
+    def validate_price_value(self, value: object, **kwargs) -> None:
         if value is not None:
             return FinancialValidator.validate_price(value)
 
     @validates("stop_price")
-    def validate_stop_price_value(self, value: object) -> None:
+    def validate_stop_price_value(self, value: object, **kwargs) -> None:
         if value is not None:
             return FinancialValidator.validate_price(value)
 
@@ -377,16 +378,16 @@ class PortfolioSchema(BaseSchema):
     max_leverage = fields.Decimal(required=False, places=2, allow_none=True)
 
     @validates("name")
-    def validate_name_security(self, value: object) -> None:
+    def validate_name_security(self, value: object, **kwargs) -> None:
         return SecurityValidator.validate_safe_string(value, "name")
 
     @validates("description")
-    def validate_description_security(self, value: object) -> None:
+    def validate_description_security(self, value: object, **kwargs) -> None:
         if value:
             return SecurityValidator.validate_safe_string(value, "description")
 
     @validates("initial_cash")
-    def validate_initial_cash_value(self, value: object) -> None:
+    def validate_initial_cash_value(self, value: object, **kwargs) -> None:
         if value <= 0:
             raise MarshmallowValidationError("Initial cash must be positive")
         if value > 1000000000:
@@ -663,7 +664,7 @@ class MarketDataRequest(BaseSchema):
     )
 
     @validates("symbol")
-    def validate_symbol_field(self, value: object) -> None:
+    def validate_symbol_field(self, value: object, **kwargs) -> None:
         return FinancialValidator.validate_symbol(value)
 
     @validates_schema
@@ -706,20 +707,20 @@ class OrderRequest(BaseSchema):
     broker_account_id = fields.Str(required=False, allow_none=True, load_default=None)
 
     @validates("symbol")
-    def validate_symbol_field(self, value: object) -> None:
+    def validate_symbol_field(self, value: object, **kwargs) -> None:
         return FinancialValidator.validate_symbol(value)
 
     @validates("quantity")
-    def validate_quantity_field(self, value: object) -> None:
+    def validate_quantity_field(self, value: object, **kwargs) -> None:
         return FinancialValidator.validate_quantity(value)
 
     @validates("price")
-    def validate_price_field(self, value: object) -> None:
+    def validate_price_field(self, value: object, **kwargs) -> None:
         if value is not None:
             return FinancialValidator.validate_price(value)
 
     @validates("stop_price")
-    def validate_stop_price_field(self, value: object) -> None:
+    def validate_stop_price_field(self, value: object, **kwargs) -> None:
         if value is not None:
             return FinancialValidator.validate_price(value)
 
@@ -759,7 +760,7 @@ class CancelOrderRequest(BaseSchema):
     )
 
     @validates("order_id")
-    def validate_order_id_safety(self, value: object) -> None:
+    def validate_order_id_safety(self, value: object, **kwargs) -> None:
         return SecurityValidator.validate_safe_string(value, "order_id")
 
 
@@ -813,15 +814,15 @@ class PositionSizeRequest(BaseSchema):
     )
 
     @validates("symbol")
-    def validate_symbol_field(self, value: object) -> None:
+    def validate_symbol_field(self, value: object, **kwargs) -> None:
         return FinancialValidator.validate_symbol(value)
 
     @validates("entry_price")
-    def validate_entry_price(self, value: object) -> None:
+    def validate_entry_price(self, value: object, **kwargs) -> None:
         return FinancialValidator.validate_price(value)
 
     @validates("stop_price")
-    def validate_stop_price(self, value: object) -> None:
+    def validate_stop_price(self, value: object, **kwargs) -> None:
         return FinancialValidator.validate_price(value)
 
     @validates_schema
@@ -885,7 +886,7 @@ class StressTestRequest(BaseSchema):
     )
 
     @validates("scenario_name")
-    def validate_scenario_safety(self, value: object) -> None:
+    def validate_scenario_safety(self, value: object, **kwargs) -> None:
         return SecurityValidator.validate_safe_string(value, "scenario_name")
 
     @validates_schema

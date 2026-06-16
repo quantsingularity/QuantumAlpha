@@ -1,11 +1,5 @@
 import React, { useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-} from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useNavigation } from "@react-navigation/native";
 import * as Animatable from "react-native-animatable";
@@ -23,7 +17,7 @@ interface WatchlistWidgetProps {
 }
 
 const WatchlistWidget: React.FC<WatchlistWidgetProps> = ({ maxItems = 5 }) => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const { theme } = useTheme();
   const [selectedTab, setSelectedTab] = useState<"stocks" | "crypto">("stocks");
 
@@ -60,10 +54,7 @@ const WatchlistWidget: React.FC<WatchlistWidgetProps> = ({ maxItems = 5 }) => {
   };
 
   const handleAssetPress = (asset: Asset) => {
-    navigation.navigate(
-      "AssetDetail" as never,
-      { symbol: asset.symbol } as never,
-    );
+    navigation.navigate("AssetDetail", { symbol: asset.symbol });
   };
 
   const handleSeeAllPress = () => {
@@ -187,7 +178,9 @@ const WatchlistWidget: React.FC<WatchlistWidgetProps> = ({ maxItems = 5 }) => {
           <View style={styles.assetList}>
             {watchlistData
               .slice(0, maxItems)
-              .map((asset, index) => renderAssetItem(asset, index))}
+              .map((asset: Asset, index: number) =>
+                renderAssetItem(asset, index),
+              )}
           </View>
         ) : (
           <View style={styles.emptyState}>

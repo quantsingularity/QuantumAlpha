@@ -135,6 +135,8 @@ class MarketDataService:
             if self.redis_client:
                 cached_price = self.redis_client.get(f"price:{symbol}")
                 if cached_price:
+                    if isinstance(cached_price, bytes):
+                        cached_price = cached_price.decode("utf-8")
                     return Decimal(cached_price)
             price = await self._fetch_market_price(symbol)
             if self.redis_client and price:

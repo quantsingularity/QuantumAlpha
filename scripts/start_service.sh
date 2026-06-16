@@ -92,11 +92,13 @@ if [[ ! -d "$PROJECT_ROOT/venv" ]]; then
   exit 1
 fi
 
+# shellcheck source=/dev/null
 source "$PROJECT_ROOT/venv/bin/activate"
 echo -e "${GREEN}✓ Activated virtual environment${NC}"
 
 # Load environment variables
 if [[ -f "$PROJECT_ROOT/config/.env.$ENV" ]]; then
+  # shellcheck source=/dev/null
   source "$PROJECT_ROOT/config/.env.$ENV"
   echo -e "${GREEN}✓ Loaded environment variables from .env.$ENV${NC}"
 else

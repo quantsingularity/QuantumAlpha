@@ -3,10 +3,13 @@ Comprehensive Audit Logging System for QuantumAlpha
 Implements immutable audit trails for financial compliance and security monitoring
 """
 
+import enum
 import hashlib
 import json
 import threading
+import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 from functools import wraps
 from typing import Any, Dict, List, Optional
 
@@ -18,6 +21,30 @@ from .database import get_db_session
 from .models import AuditAction, AuditLog, User
 
 logger = structlog.get_logger(__name__)
+
+
+def _json_safe(value: Any) -> Any:
+    """Recursively convert a value into JSON-serializable primitives.
+
+    Audit values are stored in JSON(B) columns; values such as Decimal, UUID,
+    datetime, and Enum are not JSON-serializable by default and would raise on
+    insert. This converts them to safe representations.
+    """
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, enum.Enum):
+        return value.value
+    return value
 
 
 class AuditLogger:
@@ -90,6 +117,9 @@ class AuditLogger:
             compliance_flags = self._check_compliance_flags(
                 action, resource_type, old_values, new_values, metadata
             )
+            old_values = _json_safe(old_values)
+            new_values = _json_safe(new_values)
+            metadata = _json_safe(metadata)
             audit_log = AuditLog(
                 user_id=user_id,
                 session_id=session_id,
@@ -110,9 +140,13 @@ class AuditLogger:
             with get_db_session() as db_session:
                 db_session.add(audit_log)
                 db_session.commit()
-            self._log_to_external_systems(audit_log)
-            if risk_score and risk_score > 0.8:
-                self._handle_high_risk_event(audit_log)
+                # Refresh while still bound so downstream reads do not trigger a
+                # lazy load on a detached instance, then perform external logging
+                # inside the session scope.
+                db_session.refresh(audit_log)
+                self._log_to_external_systems(audit_log)
+                if risk_score and risk_score > 0.8:
+                    self._handle_high_risk_event(audit_log)
             return audit_log
         except Exception as e:
             logger.error(f"Failed to create audit log: {e}", exc_info=True)
@@ -155,7 +189,9 @@ class AuditLogger:
         """Check for compliance violations or flags"""
         flags = []
         if resource_type == "order" and new_values:
-            order_value = new_values.get("quantity", 0) * new_values.get("price", 0)
+            quantity = new_values.get("quantity") or 0
+            price = new_values.get("price") or 0
+            order_value = quantity * price
             if order_value > 100000:
                 flags.append("high_value_transaction")
         now = datetime.now(timezone.utc)
@@ -170,7 +206,7 @@ class AuditLogger:
             if old_role != new_role:
                 flags.append("privilege_change")
         if resource_type == "position" and new_values:
-            position_value = new_values.get("market_value", 0)
+            position_value = new_values.get("market_value") or 0
             if position_value > 500000:
                 flags.append("large_position")
         return flags
@@ -271,11 +307,15 @@ class RiskCalculator:
                 if not user:
                     return 1.2
                 multiplier = 1.0
-                if (
-                    user.created_at
-                    and (datetime.now(timezone.utc) - user.created_at).days < 30
-                ):
-                    multiplier *= 1.3
+                created_at = user.created_at
+                if created_at is not None:
+                    # Normalize to an aware datetime; some backends (e.g. SQLite)
+                    # return naive datetimes, which cannot be subtracted from an
+                    # aware datetime.
+                    if created_at.tzinfo is None:
+                        created_at = created_at.replace(tzinfo=timezone.utc)
+                    if (datetime.now(timezone.utc) - created_at).days < 30:
+                        multiplier *= 1.3
                 if user.failed_login_attempts > 0:
                     multiplier *= 1.2
                 if user.role.value == "admin":

@@ -123,7 +123,9 @@ export const useFormValidation = (initialValues: any, validationRules: any) => {
   const validateField = useCallback(
     (name: string, value: any) => {
       const rule = validationRules[name];
-      if (!rule) return "";
+      if (!rule) {
+        return "";
+      }
 
       if (rule.required && (!value || value.toString().trim() === "")) {
         return rule.requiredMessage || `${name} is required`;

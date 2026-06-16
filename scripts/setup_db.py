@@ -9,6 +9,7 @@ import argparse
 import logging
 import os
 import sys
+from typing import Any
 
 import influxdb_client
 import psycopg2

@@ -658,7 +658,7 @@ const Homepage = () => {
               Trusted by Top Traders
             </Typography>
             <Typography variant="h6" color="text.secondary" fontWeight={300}>
-              Join 128,000+ traders who've transformed their strategies.
+              Join 128,000+ traders who&apos;ve transformed their strategies.
             </Typography>
           </Box>
           <Grid container spacing={3}>

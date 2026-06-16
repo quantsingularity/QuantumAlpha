@@ -34,7 +34,9 @@ class ErrorBoundary extends React.Component {
           }}
         >
           <AlertTitle>Something went wrong</AlertTitle>
-          <p>We're sorry, but there was an error loading this component.</p>
+          <p>
+            We&apos;re sorry, but there was an error loading this component.
+          </p>
           <p>
             Please try refreshing the page or contact support if the issue
             persists.

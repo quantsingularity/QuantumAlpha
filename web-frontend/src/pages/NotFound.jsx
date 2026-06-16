@@ -68,8 +68,8 @@ const NotFound = () => {
             color="text.secondary"
             sx={{ mb: 4, maxWidth: 500, mx: "auto" }}
           >
-            The page you are looking for doesn't exist or has been moved. Please
-            check the URL or return to the homepage.
+            The page you are looking for doesn&apos;t exist or has been moved.
+            Please check the URL or return to the homepage.
           </Typography>
 
           {/* Action Buttons */}

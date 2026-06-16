@@ -1,4 +1,7 @@
-import ReactNativeBiometrics, { BiometryTypes } from "react-native-biometrics";
+import ReactNativeBiometrics, {
+  BiometryType,
+  BiometryTypes,
+} from "react-native-biometrics";
 import { Platform } from "react-native";
 
 const rnBiometrics = new ReactNativeBiometrics({
@@ -7,7 +10,7 @@ const rnBiometrics = new ReactNativeBiometrics({
 
 export interface BiometricCapability {
   available: boolean;
-  biometryType: BiometryTypes | null;
+  biometryType: BiometryType | null;
   error?: string;
 }
 
@@ -30,7 +33,7 @@ export const checkBiometricAvailability =
 
       return {
         available: true,
-        biometryType,
+        biometryType: biometryType ?? null,
       };
     } catch (error) {
       console.error("Error checking biometric availability:", error);
@@ -46,9 +49,11 @@ export const checkBiometricAvailability =
  * Get a human-readable name for the biometric type
  */
 export const getBiometricTypeName = (
-  biometryType: BiometryTypes | null,
+  biometryType: BiometryType | null,
 ): string => {
-  if (!biometryType) return "Biometrics";
+  if (!biometryType) {
+    return "Biometrics";
+  }
 
   switch (biometryType) {
     case BiometryTypes.FaceID:

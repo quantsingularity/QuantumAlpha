@@ -1,7 +1,7 @@
 import messaging, {
   FirebaseMessagingTypes,
 } from "@react-native-firebase/messaging";
-import { Platform, PermissionsAndroid, Alert } from "react-native";
+import { Platform, PermissionsAndroid } from "react-native";
 import PushNotification, { Importance } from "react-native-push-notification";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -14,7 +14,7 @@ const NOTIFICATION_PERMISSION_KEY = "@notification_permission_requested";
 export const configurePushNotifications = (): void => {
   PushNotification.configure({
     // Called when a remote or local notification is opened or received
-    onNotification: function (notification) {
+    onNotification: function (notification: any) {
       console.log("NOTIFICATION:", notification);
 
       // Handle notification tap
@@ -24,12 +24,12 @@ export const configurePushNotifications = (): void => {
     },
 
     // Called when the user fails to register for remote notifications
-    onRegistrationError: function (err) {
+    onRegistrationError: function (err: any) {
       console.error("Push notification registration error:", err.message, err);
     },
 
     // IOS ONLY: called when a remote notification is received while app is in foreground
-    onAction: function (notification) {
+    onAction: function (notification: any) {
       console.log("NOTIFICATION ACTION:", notification.action);
     },
 
@@ -60,7 +60,7 @@ const createNotificationChannels = (): void => {
       importance: Importance.HIGH,
       vibrate: true,
     },
-    (created) => console.log(`Default channel created: ${created}`),
+    (created: any) => console.log(`Default channel created: ${created}`),
   );
 
   PushNotification.createChannel(
@@ -73,7 +73,7 @@ const createNotificationChannels = (): void => {
       importance: Importance.HIGH,
       vibrate: true,
     },
-    (created) => console.log(`Alerts channel created: ${created}`),
+    (created: any) => console.log(`Alerts channel created: ${created}`),
   );
 
   PushNotification.createChannel(
@@ -85,7 +85,7 @@ const createNotificationChannels = (): void => {
       importance: Importance.DEFAULT,
       vibrate: false,
     },
-    (created) => console.log(`Updates channel created: ${created}`),
+    (created: any) => console.log(`Updates channel created: ${created}`),
   );
 };
 
@@ -98,11 +98,6 @@ export const requestNotificationPermissions = async (): Promise<{
   error?: string;
 }> => {
   try {
-    // Check if we've already requested permission
-    const alreadyRequested = await AsyncStorage.getItem(
-      NOTIFICATION_PERMISSION_KEY,
-    );
-
     if (Platform.OS === "android") {
       if (Platform.Version >= 33) {
         // Android 13+ requires runtime permission
@@ -132,7 +127,7 @@ export const requestNotificationPermissions = async (): Promise<{
 
     // Get the device token
     const token = await getDeviceToken();
-    return { success: true, token };
+    return { success: true, token: token ?? undefined };
   } catch (error) {
     console.error("Error requesting notification permissions:", error);
     return {

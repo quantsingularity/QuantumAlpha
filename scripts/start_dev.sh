@@ -75,6 +75,7 @@ if [[ ! -d "$PROJECT_ROOT/venv" ]]; then
   exit 1
 fi
 
+# shellcheck source=/dev/null
 source "$PROJECT_ROOT/venv/bin/activate"
 echo -e "${GREEN}✓ Activated virtual environment${NC}"
 
@@ -85,6 +86,7 @@ if [[ ! -f "$PROJECT_ROOT/config/.env" ]]; then
 fi
 
 # Load environment variables
+# shellcheck source=/dev/null
 source "$PROJECT_ROOT/config/.env"
 
 # Start infrastructure services

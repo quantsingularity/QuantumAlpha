@@ -37,7 +37,7 @@ module "rds" {
   project_name           = "quantumalpha"
   environment            = var.environment
   vpc_id                 = module.vpc.vpc_id
-  private_subnet_ids     = module.vpc.private_subnet_ids
+  db_subnet_group_name   = module.vpc.database_subnet_group_name
   instance_class         = var.rds_instance_class
   allocated_storage      = var.rds_allocated_storage
   engine_version         = var.rds_engine_version
@@ -73,7 +73,7 @@ output "eks_cluster_certificate_authority_data" {
 
 output "rds_endpoint" {
   description = "RDS instance endpoint"
-  value       = module.rds.endpoint
+  value       = module.rds.db_instance_endpoint
 }
 
 output "elasticache_endpoint" {

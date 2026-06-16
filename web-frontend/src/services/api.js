@@ -35,7 +35,7 @@ export const api = createApi({
       }),
     }),
     getUser: builder.query({
-      query: () => "/auth/user",
+      query: () => "/auth/me",
       providesTags: ["User"],
     }),
 
@@ -85,7 +85,7 @@ export const api = createApi({
     // Trade endpoints
     getTrades: builder.query({
       query: (params) => ({
-        url: "/trades",
+        url: "/trade/orders",
         params,
       }),
       providesTags: ["Trade"],

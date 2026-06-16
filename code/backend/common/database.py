@@ -36,7 +36,15 @@ class DatabaseConfig:
         self.pool_recycle = int(os.getenv("DB_POOL_RECYCLE", 3600))
 
     def _build_postgres_url(self) -> str:
-        """Build PostgreSQL connection URL"""
+        """Build the primary database connection URL.
+
+        Honors an explicit DATABASE_URL when provided (matching the documented
+        setting in api/config.py and enabling the SQLite fallback for local and
+        test use). Otherwise builds a PostgreSQL URL from the POSTGRES_* vars.
+        """
+        explicit_url = os.getenv("DATABASE_URL")
+        if explicit_url:
+            return explicit_url
         host = os.getenv("POSTGRES_HOST", "localhost")
         port = os.getenv("POSTGRES_PORT", "5432")
         database = os.getenv("POSTGRES_DB", "quantumalpha")
@@ -47,9 +55,31 @@ class DatabaseConfig:
 
 class DatabaseManager:
 
-    def __init__(self, config) -> None:
+    def __init__(self, config=None) -> None:
+        # Accept a plain database URL string (or None), a DatabaseConfig, or a
+        # ConfigManager-like object exposing .get().
+        if config is None or isinstance(config, str):
+            db_cfg = DatabaseConfig.__new__(DatabaseConfig)
+            if isinstance(config, str) and config:
+                db_cfg.postgres_url = config
+            else:
+                db_cfg.postgres_url = db_cfg._build_postgres_url()
+            db_cfg.redis_host = os.getenv("REDIS_HOST", "localhost")
+            db_cfg.redis_port = int(os.getenv("REDIS_PORT", 6379))
+            db_cfg.redis_password = os.getenv("REDIS_PASSWORD")
+            db_cfg.influx_url = os.getenv("INFLUXDB_URL", "http://localhost:8086")
+            db_cfg.influx_token = os.getenv("INFLUXDB_TOKEN", "")
+            db_cfg.influx_org = os.getenv("INFLUXDB_ORG", "quantumalpha")
+            db_cfg.influx_bucket = os.getenv("INFLUXDB_BUCKET", "market_data")
+            db_cfg.mongo_url = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+            db_cfg.mongo_db = os.getenv("MONGODB_DATABASE", "quantumalpha")
+            db_cfg.pool_size = int(os.getenv("DB_POOL_SIZE", 5))
+            db_cfg.max_overflow = int(os.getenv("DB_MAX_OVERFLOW", 10))
+            db_cfg.pool_timeout = int(os.getenv("DB_POOL_TIMEOUT", 30))
+            db_cfg.pool_recycle = int(os.getenv("DB_POOL_RECYCLE", 3600))
+            config = db_cfg
         # Accept either DatabaseConfig or ConfigManager
-        if not isinstance(config, DatabaseConfig):
+        elif not isinstance(config, DatabaseConfig):
             # Build a DatabaseConfig-like object from ConfigManager
             db_cfg = DatabaseConfig.__new__(DatabaseConfig)
             db_cfg.postgres_url = (
@@ -104,31 +134,45 @@ class DatabaseManager:
             raise
 
     def _setup_postgresql(self) -> None:
-        """Setup PostgreSQL connection with optimizations"""
+        """Setup the primary SQL connection with optimizations.
+
+        Uses PostgreSQL pooling and connect args when the configured URL is a
+        PostgreSQL URL; for SQLite (the local/test fallback) it creates a plain
+        engine without PostgreSQL-specific options so the fallback works.
+        """
         try:
-            self._engine = create_engine(
-                self.config.postgres_url,
-                poolclass=QueuePool,
-                pool_size=self.config.pool_size,
-                max_overflow=self.config.max_overflow,
-                pool_timeout=self.config.pool_timeout,
-                pool_recycle=self.config.pool_recycle,
-                pool_pre_ping=True,
-                echo=os.getenv("SQL_ECHO", "false").lower() == "true",
-                connect_args={
-                    "application_name": "QuantumAlpha",
-                    "connect_timeout": 10,
-                    "options": "-c timezone=UTC",
-                },
-            )
+            url = self.config.postgres_url
+            if url.startswith("sqlite"):
+                self._engine = create_engine(
+                    url,
+                    echo=os.getenv("SQL_ECHO", "false").lower() == "true",
+                    connect_args={"check_same_thread": False},
+                )
+            else:
+                self._engine = create_engine(
+                    url,
+                    poolclass=QueuePool,
+                    pool_size=self.config.pool_size,
+                    max_overflow=self.config.max_overflow,
+                    pool_timeout=self.config.pool_timeout,
+                    pool_recycle=self.config.pool_recycle,
+                    pool_pre_ping=True,
+                    echo=os.getenv("SQL_ECHO", "false").lower() == "true",
+                    connect_args={
+                        "application_name": "QuantumAlpha",
+                        "connect_timeout": 10,
+                        "options": "-c timezone=UTC",
+                    },
+                )
             self._session_factory = sessionmaker(bind=self._engine)
             self._scoped_session = scoped_session(self._session_factory)
-            self._register_postgresql_events()
+            if not url.startswith("sqlite"):
+                self._register_postgresql_events()
             with self._engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
-            logger.info("PostgreSQL connection established")
+            logger.info("Primary database connection established")
         except Exception as e:
-            logger.error(f"Failed to setup PostgreSQL: {e}")
+            logger.error(f"Failed to setup primary database: {e}")
             raise
 
     def _register_postgresql_events(self) -> None:
