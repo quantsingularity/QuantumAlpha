@@ -1,26 +1,29 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Image,
   KeyboardAvoidingView,
   Platform,
-  Animated,
-  Dimensions,
+  ScrollView,
   ActivityIndicator,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import LinearGradient from "react-native-linear-gradient";
+import * as Animatable from "react-native-animatable";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
+import { Logo } from "../../components/brand/Logo";
 
 const LoginScreen = () => {
   const navigation = useNavigation();
   const { login } = useAuth();
   const { theme } = useTheme();
+  const styles = makeStyles(theme);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,37 +31,16 @@ const LoginScreen = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Animation values - useRef prevents recreation on each render
-  const logoAnim = useRef(new Animated.Value(0)).current;
-  const formAnim = useRef(new Animated.Value(0)).current;
-
-  React.useEffect(() => {
-    // Start animations when component mounts
-    Animated.sequence([
-      Animated.timing(logoAnim, {
-        toValue: 1,
-        duration: 1000,
-        useNativeDriver: true,
-      }),
-      Animated.timing(formAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
   const handleLogin = async () => {
     if (!email || !password) {
       setError("Email and password are required");
       return;
     }
-
     try {
       setLoading(true);
       setError("");
       await login(email, password);
-      // Navigation will be handled by the AuthContext
+      // RootNavigator switches to the app automatically once authenticated.
     } catch (err) {
       setError(err.message || "Login failed. Please check your credentials.");
     } finally {
@@ -66,296 +48,198 @@ const LoginScreen = () => {
     }
   };
 
-  const navigateToRegister = () => {
-    navigation.navigate("Register");
-  };
-
-  const navigateToForgotPassword = () => {
-    navigation.navigate("ForgotPassword");
-  };
-
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={[styles.container, { backgroundColor: theme.background }]}
-    >
-      <Animated.View
-        style={[
-          styles.logoContainer,
-          {
-            opacity: logoAnim,
-            transform: [
-              {
-                translateY: logoAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-50, 0],
-                }),
-              },
-            ],
-          },
-        ]}
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <Image
-          source={require("../../assets/logo.png")}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-        <Text style={[styles.appName, { color: theme.text }]}>
-          QuantumAlpha
-        </Text>
-        <Text style={[styles.tagline, { color: theme.text }]}>
-          Advanced Algorithmic Trading
-        </Text>
-      </Animated.View>
-
-      <Animated.View
-        style={[
-          styles.formContainer,
-          {
-            backgroundColor: theme.card,
-            opacity: formAnim,
-            transform: [
-              {
-                translateY: formAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [100, 0],
-                }),
-              },
-            ],
-          },
-        ]}
-      >
-        <Text style={[styles.formTitle, { color: theme.text }]}>Sign In</Text>
-
-        {error ? (
-          <View style={styles.errorContainer}>
-            <Icon name="alert-circle" size={20} color={theme.error} />
-            <Text style={[styles.errorText, { color: theme.error }]}>
-              {error}
-            </Text>
-          </View>
-        ) : null}
-
-        <View style={styles.inputGroup}>
-          <Icon
-            name="email"
-            size={20}
-            color={theme.text}
-            style={styles.inputIcon}
-          />
-          <TextInput
-            style={[
-              styles.input,
-              { color: theme.text, borderColor: theme.border },
-            ]}
-            placeholder="Email"
-            placeholderTextColor={theme.text + "80"}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Icon
-            name="lock"
-            size={20}
-            color={theme.text}
-            style={styles.inputIcon}
-          />
-          <TextInput
-            style={[
-              styles.input,
-              { color: theme.text, borderColor: theme.border },
-            ]}
-            placeholder="Password"
-            placeholderTextColor={theme.text + "80"}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!showPassword}
-          />
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
           <TouchableOpacity
-            style={styles.passwordToggle}
-            onPress={() => setShowPassword(!showPassword)}
+            style={styles.back}
+            onPress={() => navigation.navigate("Home")}
           >
-            <Icon
-              name={showPassword ? "eye-off" : "eye"}
-              size={20}
-              color={theme.text}
-            />
+            <Icon name="arrow-left" size={22} color={theme.textSecondary} />
           </TouchableOpacity>
-        </View>
 
-        <TouchableOpacity
-          testID="login-button"
-          style={[styles.loginButton, { backgroundColor: theme.primary }]}
-          onPress={handleLogin}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#ffffff" size="small" />
-          ) : (
-            <Text style={styles.loginButtonText}>Sign In</Text>
-          )}
-        </TouchableOpacity>
+          <Animatable.View
+            animation="fadeInDown"
+            duration={600}
+            style={styles.brand}
+          >
+            <Logo size={56} />
+            <Text style={styles.title}>Welcome back</Text>
+            <Text style={styles.subtitle}>
+              Sign in to your QuantumAlpha terminal
+            </Text>
+          </Animatable.View>
 
-        <TouchableOpacity
-          style={styles.forgotPasswordButton}
-          onPress={navigateToForgotPassword}
-        >
-          <Text style={[styles.forgotPasswordText, { color: theme.primary }]}>
-            Forgot Password?
-          </Text>
-        </TouchableOpacity>
+          <Animatable.View
+            animation="fadeInUp"
+            duration={600}
+            delay={150}
+            style={styles.form}
+          >
+            {error ? (
+              <View style={styles.errorBox}>
+                <Icon
+                  name="alert-circle-outline"
+                  size={16}
+                  color={theme.error}
+                />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
 
-        <View style={styles.divider}>
-          <View
-            style={[styles.dividerLine, { backgroundColor: theme.border }]}
-          />
-          <Text style={[styles.dividerText, { color: theme.text }]}>OR</Text>
-          <View
-            style={[styles.dividerLine, { backgroundColor: theme.border }]}
-          />
-        </View>
+            <Text style={styles.label}>Email</Text>
+            <View style={styles.inputRow}>
+              <Icon
+                name="email-outline"
+                size={19}
+                color={theme.textSecondary}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="you@example.com"
+                placeholderTextColor={theme.textMuted}
+                value={email}
+                onChangeText={(t) => {
+                  setEmail(t);
+                  setError("");
+                }}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
 
-        <TouchableOpacity
-          style={[styles.registerButton, { borderColor: theme.primary }]}
-          onPress={navigateToRegister}
-        >
-          <Text style={[styles.registerButtonText, { color: theme.primary }]}>
-            Create New Account
-          </Text>
-        </TouchableOpacity>
-      </Animated.View>
-    </KeyboardAvoidingView>
+            <Text style={styles.label}>Password</Text>
+            <View style={styles.inputRow}>
+              <Icon name="lock-outline" size={19} color={theme.textSecondary} />
+              <TextInput
+                style={styles.input}
+                placeholder="••••••••"
+                placeholderTextColor={theme.textMuted}
+                value={password}
+                onChangeText={(t) => {
+                  setPassword(t);
+                  setError("");
+                }}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity onPress={() => setShowPassword((s) => !s)}>
+                <Icon
+                  name={showPassword ? "eye-off-outline" : "eye-outline"}
+                  size={19}
+                  color={theme.textSecondary}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.forgot}
+              onPress={() => navigation.navigate("ForgotPassword")}
+            >
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              <LinearGradient
+                colors={theme.gradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.button}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#060A14" />
+                ) : (
+                  <Text style={styles.buttonText}>Sign in</Text>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <View style={styles.footerRow}>
+              <Text style={styles.footerText}>New to QuantumAlpha? </Text>
+              <TouchableOpacity onPress={() => navigation.navigate("Register")}>
+                <Text style={styles.footerLink}>Create an account</Text>
+              </TouchableOpacity>
+            </View>
+          </Animatable.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
-const { width } = Dimensions.get("window");
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  logoContainer: {
-    alignItems: "center",
-    marginBottom: 40,
-  },
-  logo: {
-    width: 80,
-    height: 80,
-    marginBottom: 10,
-  },
-  appName: {
-    fontSize: 28,
-    fontWeight: "bold",
-    marginBottom: 5,
-  },
-  tagline: {
-    fontSize: 16,
-    opacity: 0.7,
-  },
-  formContainer: {
-    width: "100%",
-    maxWidth: 400,
-    borderRadius: 10,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  formTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  errorContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255, 0, 0, 0.1)",
-    padding: 10,
-    borderRadius: 5,
-    marginBottom: 15,
-  },
-  errorText: {
-    marginLeft: 10,
-    fontSize: 14,
-  },
-  inputGroup: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 15,
-    position: "relative",
-  },
-  inputIcon: {
-    position: "absolute",
-    left: 15,
-    zIndex: 1,
-  },
-  input: {
-    flex: 1,
-    height: 50,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 45,
-    fontSize: 16,
-  },
-  passwordToggle: {
-    position: "absolute",
-    right: 15,
-    zIndex: 1,
-  },
-  loginButton: {
-    height: 50,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 10,
-  },
-  loginButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  forgotPasswordButton: {
-    alignSelf: "center",
-    marginTop: 15,
-    padding: 5,
-  },
-  forgotPasswordText: {
-    fontSize: 14,
-  },
-  divider: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-  },
-  dividerText: {
-    marginHorizontal: 10,
-    fontSize: 14,
-  },
-  registerButton: {
-    height: 50,
-    borderRadius: 8,
-    borderWidth: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  registerButtonText: {
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-});
+const makeStyles = (theme) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.background },
+    scroll: { flexGrow: 1, paddingHorizontal: 24, paddingBottom: 30 },
+    back: { paddingVertical: 12, width: 40 },
+    brand: { alignItems: "center", marginTop: 12, marginBottom: 32 },
+    title: {
+      color: theme.text,
+      fontSize: 28,
+      fontWeight: "800",
+      marginTop: 18,
+      letterSpacing: -0.5,
+    },
+    subtitle: { color: theme.textSecondary, fontSize: 14.5, marginTop: 6 },
+    form: {},
+    label: {
+      color: theme.textSecondary,
+      fontSize: 13,
+      fontWeight: "600",
+      marginBottom: 8,
+      marginTop: 16,
+    },
+    inputRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: theme.card,
+      borderColor: theme.border,
+      borderWidth: 1,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      height: 52,
+    },
+    input: { flex: 1, color: theme.text, fontSize: 15.5, marginLeft: 10 },
+    forgot: { alignSelf: "flex-end", marginTop: 14 },
+    forgotText: { color: theme.primary, fontWeight: "600", fontSize: 13.5 },
+    button: {
+      height: 54,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 24,
+    },
+    buttonText: { color: "#060A14", fontWeight: "800", fontSize: 16.5 },
+    footerRow: {
+      flexDirection: "row",
+      justifyContent: "center",
+      marginTop: 26,
+    },
+    footerText: { color: theme.textSecondary, fontSize: 14 },
+    footerLink: { color: theme.primary, fontSize: 14, fontWeight: "700" },
+    errorBox: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      backgroundColor: "rgba(251,113,133,0.1)",
+      borderColor: "rgba(251,113,133,0.3)",
+      borderWidth: 1,
+      borderRadius: 10,
+      padding: 12,
+      marginBottom: 4,
+    },
+    errorText: { color: theme.error, fontSize: 13.5, marginLeft: 8, flex: 1 },
+  });
 
 export default LoginScreen;

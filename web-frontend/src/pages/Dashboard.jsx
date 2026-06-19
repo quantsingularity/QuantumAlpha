@@ -1,24 +1,21 @@
 import {
-  Avatar,
   Box,
   Button,
-  Card,
-  CardContent,
   Chip,
-  Container,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  Fade,
   Grid,
   IconButton,
   InputAdornment,
-  Paper,
+  Skeleton,
+  Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
-  useMediaQuery,
-  useTheme,
 } from "@mui/material";
 import {
   Activity,
@@ -26,15 +23,11 @@ import {
   ArrowUpRight,
   BarChart3,
   DollarSign,
-  Eye,
   Minus,
   Plus,
-  Settings,
   TrendingUp,
-  Zap,
 } from "lucide-react";
-import { useState } from "react";
-import { useDispatch } from "react-redux";
+import { useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -46,838 +39,667 @@ import {
 } from "recharts";
 import ErrorBoundary from "../components/common/ErrorBoundary";
 import {
+  useGetPortfolioHistoryQuery,
   useGetPortfolioQuery,
   useGetStrategiesQuery,
   useGetTradesQuery,
 } from "../services/api";
+import { palette } from "../theme/tokens";
+import {
+  formatCompactNumber,
+  formatCurrency,
+  formatRelativeTime,
+} from "../utils/format";
 
-// Mock data for demonstration
-const mockPortfolioData = {
-  portfolioValue: 125847.32,
-  dailyChange: 2847.32,
-  percentChange: 2.31,
-  historicalData: [
-    { date: "2024-01-01", value: 100000 },
-    { date: "2024-02-01", value: 105000 },
-    { date: "2024-03-01", value: 108000 },
-    { date: "2024-04-01", value: 112000 },
-    { date: "2024-05-01", value: 118000 },
-    { date: "2024-06-01", value: 125847 },
-  ],
+const MONO = '"JetBrains Mono", monospace';
+
+// ── Normalisers ──────────────────────────────────────────────────────────
+// The backend returns rich objects (total_value, return_ytd, side, ...). These
+// helpers reduce any shape - backend, partial, or missing - to exactly what the
+// UI renders, and guarantee arrays stay arrays so .map can never crash.
+const normalizePortfolio = (p) => {
+  const d = p || {};
+  return {
+    value: d.total_value ?? d.portfolioValue ?? 0,
+    dailyChange: d.daily_change ?? d.dailyChange ?? 0,
+    percentChange: d.daily_change_percent ?? d.percentChange ?? 0,
+    cash: d.cash_balance ?? 0,
+    invested: d.invested_amount ?? 0,
+    positions: Array.isArray(d.positions) ? d.positions : [],
+  };
 };
 
-const mockStrategies = [
-  {
-    id: 1,
-    name: "AI Momentum",
-    return: 15.2,
-    status: "active",
-    risk: "medium",
-  },
-  {
-    id: 2,
-    name: "Quantum Alpha",
-    return: 23.8,
-    status: "active",
-    risk: "high",
-  },
-  {
-    id: 3,
-    name: "Conservative Growth",
-    return: 8.4,
-    status: "active",
-    risk: "low",
-  },
-];
+const normalizeStrategies = (s) => {
+  const list = Array.isArray(s)
+    ? s
+    : Array.isArray(s?.strategies)
+      ? s.strategies
+      : [];
+  return list.map((x, i) => ({
+    id: x.id ?? x.name ?? i,
+    name: x.name ?? "Untitled strategy",
+    status: x.status ?? "active",
+    ret: x.return_ytd ?? x.return ?? 0,
+    sharpe: x.sharpe_ratio ?? x.sharpe ?? null,
+    type: x.type ?? "custom",
+  }));
+};
 
-const mockTrades = [
-  {
-    id: 1,
-    symbol: "AAPL",
-    type: "BUY",
-    amount: 1500,
-    price: 175.23,
-    time: "2 hours ago",
-  },
-  {
-    id: 2,
-    symbol: "TSLA",
-    type: "SELL",
-    amount: 2300,
-    price: 245.67,
-    time: "4 hours ago",
-  },
-  {
-    id: 3,
-    symbol: "NVDA",
-    type: "BUY",
-    amount: 1800,
-    price: 892.45,
-    time: "6 hours ago",
-  },
-];
+const normalizeTrades = (t) => {
+  const list = Array.isArray(t) ? t : Array.isArray(t?.trades) ? t.trades : [];
+  return list.map((x, i) => ({
+    id: x.id ?? i,
+    symbol: x.symbol ?? "-",
+    side: (x.side ?? x.type ?? "buy").toString().toUpperCase(),
+    amount:
+      x.total_value ??
+      (x.quantity && x.price ? x.quantity * x.price : (x.amount ?? 0)),
+    price: x.price ?? 0,
+    time: x.timestamp ?? x.time ?? null,
+  }));
+};
 
-const Dashboard = () => {
-  const theme = useTheme();
-  const _dispatch = useDispatch();
-  const _isMobile = useMediaQuery(theme.breakpoints.down("md"));
-  const [_animationDelay] = useState(0);
-  const [depositOpen, setDepositOpen] = useState(false);
-  const [withdrawOpen, setWithdrawOpen] = useState(false);
-  const [depositAmount, setDepositAmount] = useState("");
-  const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [transactionMsg, setTransactionMsg] = useState("");
+const normalizeHistory = (h) => {
+  const list = Array.isArray(h)
+    ? h
+    : Array.isArray(h?.historicalData)
+      ? h.historicalData
+      : [];
+  return list.map((x) => ({
+    date: x.date ?? x.name ?? "",
+    value: x.value ?? 0,
+  }));
+};
 
-  // RTK Query hooks with automatic loading and error states
-  const { data: portfolioData } = useGetPortfolioQuery();
-
-  const { data: strategiesData } = useGetStrategiesQuery();
-
-  const { data: tradesData } = useGetTradesQuery({ limit: 5 });
-
-  // Use mock data for demonstration
-  const displayPortfolioData = portfolioData || mockPortfolioData;
-  const displayStrategies = strategiesData || mockStrategies;
-  const displayTrades = tradesData || mockTrades;
-
-  // Handle deposit/withdraw modals
-  const handleOpenDepositModal = () => setDepositOpen(true);
-  const handleOpenWithdrawModal = () => setWithdrawOpen(true);
-
-  const StatCard = ({ title, value, change, icon: Icon, color, delay = 0 }) => (
-    <Fade in={true} timeout={800} style={{ transitionDelay: `${delay}ms` }}>
-      <Card
-        sx={{
-          height: "100%",
-          background: `linear-gradient(135deg, ${color}15, ${color}05)`,
-          border: `1px solid ${color}30`,
-          borderRadius: 3,
-          transition: "all 0.3s ease",
-          cursor: "pointer",
-          "&:hover": {
-            transform: "translateY(-4px)",
-            boxShadow: `0 8px 25px ${color}25`,
-            border: `1px solid ${color}50`,
-          },
-        }}
+// ── Small presentational pieces ─────────────────────────────────────────
+const StatCard = ({ title, value, change, icon: Icon, accent }) => {
+  const positive = (change ?? 0) >= 0;
+  return (
+    <Box
+      sx={{
+        height: "100%",
+        p: 2.5,
+        borderRadius: 3,
+        border: `1px solid ${palette.border}`,
+        background: palette.surface,
+        position: "relative",
+        overflow: "hidden",
+        transition: "border-color .2s ease, transform .2s ease",
+        "&:hover": {
+          borderColor: `${accent}55`,
+          transform: "translateY(-3px)",
+        },
+        "&::before": {
+          content: '""',
+          position: "absolute",
+          top: 0,
+          insetInline: 0,
+          height: 2,
+          background: `linear-gradient(90deg, transparent, ${accent}, transparent)`,
+        },
+      }}
+    >
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        sx={{ mb: 1.5 }}
       >
-        <CardContent sx={{ p: 3 }}>
-          <Box
+        <Typography variant="caption" sx={{ color: "text.secondary" }}>
+          {title}
+        </Typography>
+        <Box
+          sx={{
+            width: 34,
+            height: 34,
+            borderRadius: 2,
+            display: "grid",
+            placeItems: "center",
+            color: accent,
+            background: `${accent}14`,
+          }}
+        >
+          <Icon size={18} />
+        </Box>
+      </Stack>
+      <Typography
+        sx={{ fontFamily: MONO, fontWeight: 700, fontSize: "1.6rem", mb: 0.5 }}
+      >
+        {value}
+      </Typography>
+      {change !== null && change !== undefined && (
+        <Stack direction="row" spacing={0.5} alignItems="center">
+          {positive ? (
+            <ArrowUpRight size={15} color={palette.mint} />
+          ) : (
+            <ArrowDownRight size={15} color={palette.rose} />
+          )}
+          <Typography
             sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              mb: 2,
+              fontFamily: MONO,
+              fontSize: "0.82rem",
+              fontWeight: 700,
+              color: positive ? palette.mint : palette.rose,
             }}
           >
-            <Typography variant="body2" color="text.secondary" fontWeight={500}>
-              {title}
-            </Typography>
-            <Avatar sx={{ bgcolor: `${color}20`, width: 40, height: 40 }}>
-              <Icon size={20} color={color} />
-            </Avatar>
-          </Box>
-          <Typography
-            variant="h4"
-            fontWeight={700}
-            sx={{ mb: 1, color: color }}
-          >
-            {value}
+            {positive ? "+" : ""}
+            {Number(change).toFixed(2)}%
           </Typography>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            {change > 0 ? (
-              <ArrowUpRight size={16} color="#10b981" />
-            ) : (
-              <ArrowDownRight size={16} color="#ef4444" />
-            )}
-            <Typography
-              variant="body2"
-              color={change > 0 ? "#10b981" : "#ef4444"}
-              fontWeight={600}
-            >
-              {change > 0 ? "+" : ""}
-              {change}%
-            </Typography>
-          </Box>
-        </CardContent>
-      </Card>
-    </Fade>
+        </Stack>
+      )}
+    </Box>
   );
+};
+
+const Panel = ({ title, action, children, sx }) => (
+  <Box
+    sx={{
+      p: 3,
+      borderRadius: 4,
+      border: `1px solid ${palette.border}`,
+      background: palette.surface,
+      height: "100%",
+      ...sx,
+    }}
+  >
+    <Stack
+      direction="row"
+      alignItems="center"
+      justifyContent="space-between"
+      sx={{ mb: 2.5 }}
+    >
+      <Typography variant="h6">{title}</Typography>
+      {action}
+    </Stack>
+    {children}
+  </Box>
+);
+
+const Dashboard = () => {
+  const [range, setRange] = useState("1M");
+  const [depositOpen, setDepositOpen] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [msg, setMsg] = useState("");
+
+  const { data: portfolioRaw, isLoading: pLoading } = useGetPortfolioQuery();
+  const { data: strategiesRaw, isLoading: sLoading } = useGetStrategiesQuery();
+  const { data: tradesRaw } = useGetTradesQuery({ limit: 6 });
+  const { data: historyRaw } = useGetPortfolioHistoryQuery(range);
+
+  const portfolio = useMemo(
+    () => normalizePortfolio(portfolioRaw),
+    [portfolioRaw],
+  );
+  const strategies = useMemo(
+    () => normalizeStrategies(strategiesRaw),
+    [strategiesRaw],
+  );
+  const trades = useMemo(() => normalizeTrades(tradesRaw), [tradesRaw]);
+  const history = useMemo(() => normalizeHistory(historyRaw), [historyRaw]);
+
+  const activeCount = strategies.filter((s) => s.status === "active").length;
+  const winRate = useMemo(() => {
+    if (!strategies.length) return null;
+    const wins = strategies.filter((s) => s.ret > 0).length;
+    return ((wins / strategies.length) * 100).toFixed(1);
+  }, [strategies]);
+
+  const closeModals = () => {
+    setDepositOpen(false);
+    setWithdrawOpen(false);
+    setAmount("");
+    setMsg("");
+  };
+
+  const submitTxn = (type) => {
+    const val = parseFloat(amount);
+    if (!amount || val <= 0) return;
+    setMsg(
+      `${formatCurrency(val)} ${type === "deposit" ? "deposited" : "withdrawal initiated"}`,
+    );
+    setTimeout(closeModals, 1800);
+  };
 
   return (
     <ErrorBoundary>
-      <Box
-        sx={{
-          minHeight: "100vh",
-          background:
-            "linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)",
-          py: 4,
-        }}
-      >
-        <Container maxWidth="xl">
-          {/* Hero Section */}
-          <Fade in={true} timeout={1000}>
-            <Box sx={{ mb: 6, textAlign: "center" }}>
-              <Typography
-                variant="h2"
-                fontWeight={800}
-                sx={{
-                  background:
-                    "linear-gradient(45deg, #00d4ff, #ff00ff, #00ff88)",
-                  backgroundClip: "text",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  mb: 2,
-                  fontSize: { xs: "2.5rem", md: "3.5rem" },
-                }}
-              >
-                QuantumAlpha Dashboard
-              </Typography>
-              <Typography
-                variant="h6"
-                color="text.secondary"
-                sx={{ maxWidth: 600, mx: "auto", mb: 4 }}
-              >
-                Advanced AI-powered trading platform with quantum-enhanced
-                algorithms
-              </Typography>
-              <Box
-                sx={{
-                  display: "flex",
-                  gap: 2,
-                  justifyContent: "center",
-                  flexWrap: "wrap",
-                }}
-              >
-                <Button
-                  variant="contained"
-                  size="large"
-                  startIcon={<Plus size={20} />}
-                  onClick={handleOpenDepositModal}
-                  sx={{
-                    px: 4,
-                    py: 1.5,
-                    fontWeight: 600,
-                    background: "linear-gradient(45deg, #00d4ff, #0099cc)",
-                    boxShadow: "0 4px 20px rgba(0, 212, 255, 0.3)",
-                    "&:hover": {
-                      background: "linear-gradient(45deg, #0099cc, #0066aa)",
-                      boxShadow: "0 6px 25px rgba(0, 212, 255, 0.4)",
-                      transform: "translateY(-2px)",
-                    },
-                  }}
-                >
-                  Add Funds
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="large"
-                  startIcon={<Settings size={20} />}
-                  onClick={handleOpenWithdrawModal}
-                  sx={{
-                    px: 4,
-                    py: 1.5,
-                    fontWeight: 600,
-                    borderWidth: 2,
-                    borderColor: "#00d4ff",
-                    color: "#00d4ff",
-                    "&:hover": {
-                      borderWidth: 2,
-                      borderColor: "#00d4ff",
-                      background: "rgba(0, 212, 255, 0.1)",
-                      transform: "translateY(-2px)",
-                    },
-                  }}
-                >
-                  Settings
-                </Button>
-              </Box>
-            </Box>
-          </Fade>
+      <Box>
+        {/* Header */}
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          alignItems={{ sm: "center" }}
+          justifyContent="space-between"
+          spacing={2}
+          sx={{ mb: 4 }}
+        >
+          <Box>
+            <Typography variant="h4">Dashboard</Typography>
+            <Typography variant="body2">
+              Your portfolio at a glance, updated in real time.
+            </Typography>
+          </Box>
+          <Stack direction="row" spacing={1.5}>
+            <Button
+              variant="outlined"
+              startIcon={<Minus size={17} />}
+              onClick={() => setWithdrawOpen(true)}
+            >
+              Withdraw
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<Plus size={17} />}
+              onClick={() => setDepositOpen(true)}
+            >
+              Add funds
+            </Button>
+          </Stack>
+        </Stack>
 
-          {/* Stats Cards */}
-          <Grid container spacing={3} sx={{ mb: 4 }}>
-            <Grid item xs={12} sm={6} md={3}>
+        {/* Stats */}
+        <Grid container spacing={2.5} sx={{ mb: 3 }}>
+          <Grid item xs={12} sm={6} md={3}>
+            {pLoading ? (
+              <Skeleton variant="rounded" height={132} />
+            ) : (
               <StatCard
-                title="Portfolio Value"
-                value={`$${displayPortfolioData.portfolioValue?.toLocaleString() || "125,847"}`}
-                change={displayPortfolioData.percentChange || 2.31}
+                title="Portfolio value"
+                value={formatCurrency(portfolio.value)}
+                change={portfolio.percentChange}
                 icon={DollarSign}
-                color="#00d4ff"
-                delay={0}
+                accent={palette.cyan}
               />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
+            )}
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            {pLoading ? (
+              <Skeleton variant="rounded" height={132} />
+            ) : (
               <StatCard
                 title="Daily P&L"
-                value={`$${displayPortfolioData.dailyChange?.toLocaleString() || "2,847"}`}
-                change={1.8}
+                value={`$${formatCompactNumber(portfolio.dailyChange)}`}
+                change={portfolio.percentChange}
                 icon={TrendingUp}
-                color="#10b981"
-                delay={200}
+                accent={palette.mint}
               />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <StatCard
-                title="Active Strategies"
-                value={displayStrategies?.length || 3}
-                change={12.5}
-                icon={Activity}
-                color="#f59e0b"
-                delay={400}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <StatCard
-                title="Win Rate"
-                value="87.3%"
-                change={5.2}
-                icon={BarChart3}
-                color="#8b5cf6"
-                delay={600}
-              />
-            </Grid>
+            )}
           </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <StatCard
+              title="Active strategies"
+              value={activeCount || strategies.length}
+              change={null}
+              icon={Activity}
+              accent={palette.violet}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <StatCard
+              title="Win rate"
+              value={winRate ? `${winRate}%` : "-"}
+              change={null}
+              icon={BarChart3}
+              accent={palette.amber}
+            />
+          </Grid>
+        </Grid>
 
-          {/* Performance Chart */}
-          <Fade in={true} timeout={1200}>
-            <Paper
-              elevation={0}
+        {/* Performance chart */}
+        <Panel
+          title="Portfolio performance"
+          action={
+            <ToggleButtonGroup
+              size="small"
+              exclusive
+              value={range}
+              onChange={(_e, v) => v && setRange(v)}
               sx={{
-                p: 4,
-                mb: 4,
-                borderRadius: 4,
-                background: "rgba(255, 255, 255, 0.05)",
-                backdropFilter: "blur(10px)",
-                border: "1px solid rgba(255, 255, 255, 0.1)",
-                boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
+                "& .MuiToggleButton-root": {
+                  px: 1.5,
+                  py: 0.4,
+                  fontFamily: MONO,
+                  fontSize: "0.72rem",
+                  border: `1px solid ${palette.border}`,
+                  color: "text.secondary",
+                  "&.Mui-selected": {
+                    color: palette.void,
+                    background: palette.cyan,
+                    "&:hover": { background: palette.cyan },
+                  },
+                },
               }}
             >
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  mb: 3,
-                }}
+              {["1W", "1M", "3M", "1Y"].map((r) => (
+                <ToggleButton key={r} value={r}>
+                  {r}
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+          }
+          sx={{ mb: 3 }}
+        >
+          <Box sx={{ height: 320 }}>
+            {history.length === 0 ? (
+              <Stack
+                alignItems="center"
+                justifyContent="center"
+                sx={{ height: "100%", color: "text.secondary" }}
               >
-                <Typography variant="h5" fontWeight={700} color="white">
-                  Portfolio Performance
+                <CircularProgress size={26} sx={{ mb: 1.5 }} />
+                <Typography variant="body2">
+                  Loading performance data…
                 </Typography>
-                <Chip
-                  label="Real-time"
-                  icon={<Zap size={16} />}
-                  sx={{
-                    background: "linear-gradient(45deg, #10b981, #059669)",
-                    color: "white",
-                    fontWeight: 600,
-                  }}
-                />
-              </Box>
-              <Box sx={{ height: 350 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={displayPortfolioData.historicalData}>
-                    <defs>
-                      <linearGradient
-                        id="colorValue"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor="#00d4ff"
-                          stopOpacity={0.3}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor="#00d4ff"
-                          stopOpacity={0}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="rgba(255,255,255,0.1)"
-                    />
-                    <XAxis
-                      dataKey="date"
-                      stroke="rgba(255,255,255,0.7)"
-                      fontSize={12}
-                    />
-                    <YAxis
-                      stroke="rgba(255,255,255,0.7)"
-                      fontSize={12}
-                      tickFormatter={(value) =>
-                        `$${(value / 1000).toFixed(0)}k`
-                      }
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "rgba(0, 0, 0, 0.8)",
-                        border: "1px solid rgba(255, 255, 255, 0.2)",
-                        borderRadius: "8px",
-                        color: "white",
-                      }}
-                      formatter={(value) => [
-                        `$${value.toLocaleString()}`,
-                        "Portfolio Value",
-                      ]}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="value"
-                      stroke="#00d4ff"
-                      strokeWidth={3}
-                      fillOpacity={1}
-                      fill="url(#colorValue)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </Box>
-            </Paper>
-          </Fade>
+              </Stack>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={history}
+                  margin={{ left: 4, right: 8, top: 8 }}
+                >
+                  <defs>
+                    <linearGradient id="qaArea" x1="0" y1="0" x2="0" y2="1">
+                      <stop
+                        offset="0%"
+                        stopColor={palette.cyan}
+                        stopOpacity={0.35}
+                      />
+                      <stop
+                        offset="100%"
+                        stopColor={palette.cyan}
+                        stopOpacity={0}
+                      />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="rgba(148,163,184,0.1)"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="date"
+                    stroke={palette.textMute}
+                    fontSize={11}
+                    tickLine={false}
+                    minTickGap={32}
+                  />
+                  <YAxis
+                    stroke={palette.textMute}
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(v) => `$${formatCompactNumber(v)}`}
+                    width={60}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: palette.surfaceRaised,
+                      border: `1px solid ${palette.border}`,
+                      borderRadius: 10,
+                      color: palette.text,
+                      fontFamily: MONO,
+                      fontSize: 12,
+                    }}
+                    formatter={(v) => [formatCurrency(v), "Value"]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="value"
+                    stroke={palette.cyan}
+                    strokeWidth={2.5}
+                    fill="url(#qaArea)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </Box>
+        </Panel>
 
-          {/* Strategy Performance and Recent Trades */}
-          <Grid container spacing={4}>
-            <Grid item xs={12} lg={8}>
-              <Fade in={true} timeout={1400}>
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 4,
-                    height: "100%",
-                    borderRadius: 4,
-                    background: "rgba(255, 255, 255, 0.05)",
-                    backdropFilter: "blur(10px)",
-                    border: "1px solid rgba(255, 255, 255, 0.1)",
-                    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
-                  }}
-                >
-                  <Typography
-                    variant="h5"
-                    fontWeight={700}
-                    color="white"
-                    sx={{ mb: 3 }}
-                  >
-                    AI Strategy Performance
-                  </Typography>
-                  <Box
-                    sx={{ display: "flex", flexDirection: "column", gap: 2 }}
-                  >
-                    {displayStrategies.map((strategy) => (
-                      <Card
-                        key={strategy.id || strategy.name}
+        {/* Strategies + Trades */}
+        <Grid container spacing={3}>
+          <Grid item xs={12} lg={7}>
+            <Panel title="Strategy performance">
+              {sLoading ? (
+                <Stack spacing={1.5}>
+                  {[0, 1, 2].map((i) => (
+                    <Skeleton key={i} variant="rounded" height={64} />
+                  ))}
+                </Stack>
+              ) : strategies.length === 0 ? (
+                <Typography variant="body2">
+                  No strategies yet. Create one to get started.
+                </Typography>
+              ) : (
+                <Stack spacing={1.25}>
+                  {strategies.map((s) => {
+                    const up = s.ret >= 0;
+                    return (
+                      <Stack
+                        key={s.id}
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="space-between"
                         sx={{
-                          background: "rgba(255, 255, 255, 0.05)",
-                          border: "1px solid rgba(255, 255, 255, 0.1)",
-                          borderRadius: 2,
-                          transition: "all 0.3s ease",
+                          p: 2,
+                          borderRadius: 2.5,
+                          border: `1px solid ${palette.border}`,
+                          transition: "background .2s ease, transform .2s ease",
                           "&:hover": {
-                            background: "rgba(255, 255, 255, 0.1)",
-                            transform: "translateX(8px)",
+                            background: palette.surfaceRaised,
+                            transform: "translateX(4px)",
                           },
                         }}
                       >
-                        <CardContent sx={{ p: 3 }}>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                            }}
-                          >
-                            <Box>
-                              <Typography
-                                variant="h6"
-                                fontWeight={600}
-                                color="white"
-                              >
-                                {strategy.name}
-                              </Typography>
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 2,
-                                  mt: 1,
-                                }}
-                              >
-                                <Chip
-                                  label={strategy.status}
-                                  size="small"
-                                  sx={{
-                                    background:
-                                      strategy.status === "active"
-                                        ? "#10b981"
-                                        : "#6b7280",
-                                    color: "white",
-                                    fontWeight: 500,
-                                  }}
-                                />
-                                <Chip
-                                  label={`${strategy.risk} risk`}
-                                  size="small"
-                                  variant="outlined"
-                                  sx={{
-                                    borderColor:
-                                      strategy.risk === "high"
-                                        ? "#ef4444"
-                                        : strategy.risk === "medium"
-                                          ? "#f59e0b"
-                                          : "#10b981",
-                                    color:
-                                      strategy.risk === "high"
-                                        ? "#ef4444"
-                                        : strategy.risk === "medium"
-                                          ? "#f59e0b"
-                                          : "#10b981",
-                                  }}
-                                />
-                              </Box>
-                            </Box>
-                            <Box sx={{ textAlign: "right" }}>
-                              <Typography
-                                variant="h5"
-                                fontWeight={700}
-                                color={
-                                  strategy.return > 0 ? "#10b981" : "#ef4444"
-                                }
-                              >
-                                +{strategy.return}%
-                              </Typography>
-                              <IconButton
-                                size="small"
-                                sx={{ color: "#00d4ff" }}
-                              >
-                                <Eye size={16} />
-                              </IconButton>
-                            </Box>
-                          </Box>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </Box>
-                </Paper>
-              </Fade>
-            </Grid>
-            <Grid item xs={12} lg={4}>
-              <Fade in={true} timeout={1600}>
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 4,
-                    height: "100%",
-                    borderRadius: 4,
-                    background: "rgba(255, 255, 255, 0.05)",
-                    backdropFilter: "blur(10px)",
-                    border: "1px solid rgba(255, 255, 255, 0.1)",
-                    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
-                  }}
-                >
-                  <Typography
-                    variant="h5"
-                    fontWeight={700}
-                    color="white"
-                    sx={{ mb: 3 }}
-                  >
-                    Recent Trades
-                  </Typography>
-                  <Box
-                    sx={{ display: "flex", flexDirection: "column", gap: 2 }}
-                  >
-                    {displayTrades.map((trade, _index) => (
-                      <Card
-                        key={trade.id}
-                        sx={{
-                          background: "rgba(255, 255, 255, 0.05)",
-                          border: "1px solid rgba(255, 255, 255, 0.1)",
-                          borderRadius: 2,
-                          transition: "all 0.3s ease",
-                          "&:hover": {
-                            background: "rgba(255, 255, 255, 0.1)",
-                          },
-                        }}
-                      >
-                        <CardContent sx={{ p: 2 }}>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              mb: 1,
-                            }}
-                          >
-                            <Typography
-                              variant="subtitle1"
-                              fontWeight={600}
-                              color="white"
-                            >
-                              {trade.symbol}
-                            </Typography>
+                        <Box>
+                          <Typography sx={{ fontWeight: 600 }}>
+                            {s.name}
+                          </Typography>
+                          <Stack direction="row" spacing={1} sx={{ mt: 0.75 }}>
                             <Chip
-                              label={trade.type.toUpperCase()}
+                              label={s.status}
                               size="small"
                               sx={{
+                                height: 20,
+                                fontSize: "0.68rem",
+                                color:
+                                  s.status === "active"
+                                    ? palette.mint
+                                    : palette.textDim,
                                 background:
-                                  trade.type === "BUY" ? "#10b981" : "#ef4444",
-                                color: "white",
-                                fontWeight: 500,
-                                fontSize: "0.75rem",
+                                  s.status === "active"
+                                    ? "rgba(52,211,153,0.12)"
+                                    : "rgba(148,163,184,0.1)",
                               }}
                             />
-                          </Box>
-                          <Typography variant="body2" color="text.secondary">
-                            ${trade.amount.toLocaleString()} @ ${trade.price}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {trade.time}
-                          </Typography>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </Box>
-                </Paper>
-              </Fade>
-            </Grid>
+                            {s.sharpe != null && (
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  fontFamily: MONO,
+                                  color: "text.secondary",
+                                }}
+                              >
+                                Sharpe {Number(s.sharpe).toFixed(2)}
+                              </Typography>
+                            )}
+                          </Stack>
+                        </Box>
+                        <Typography
+                          sx={{
+                            fontFamily: MONO,
+                            fontWeight: 700,
+                            fontSize: "1.05rem",
+                            color: up ? palette.mint : palette.rose,
+                          }}
+                        >
+                          {up ? "+" : ""}
+                          {Number(s.ret).toFixed(1)}%
+                        </Typography>
+                      </Stack>
+                    );
+                  })}
+                </Stack>
+              )}
+            </Panel>
           </Grid>
-        </Container>
+
+          <Grid item xs={12} lg={5}>
+            <Panel title="Recent trades">
+              {trades.length === 0 ? (
+                <Typography variant="body2">No recent trades.</Typography>
+              ) : (
+                <Stack spacing={1.25}>
+                  {trades.map((t) => {
+                    const buy = t.side === "BUY";
+                    return (
+                      <Stack
+                        key={t.id}
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="space-between"
+                        sx={{
+                          p: 1.75,
+                          borderRadius: 2.5,
+                          border: `1px solid ${palette.border}`,
+                        }}
+                      >
+                        <Stack
+                          direction="row"
+                          spacing={1.5}
+                          alignItems="center"
+                        >
+                          <Box
+                            sx={{
+                              width: 34,
+                              height: 34,
+                              borderRadius: 2,
+                              display: "grid",
+                              placeItems: "center",
+                              color: buy ? palette.mint : palette.rose,
+                              background: buy
+                                ? "rgba(52,211,153,0.12)"
+                                : "rgba(251,113,133,0.12)",
+                            }}
+                          >
+                            {buy ? (
+                              <ArrowUpRight size={16} />
+                            ) : (
+                              <ArrowDownRight size={16} />
+                            )}
+                          </Box>
+                          <Box>
+                            <Typography
+                              sx={{ fontWeight: 600, fontSize: "0.9rem" }}
+                            >
+                              {t.symbol}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              sx={{ color: "text.secondary" }}
+                            >
+                              {t.time ? formatRelativeTime(t.time) : t.side}
+                            </Typography>
+                          </Box>
+                        </Stack>
+                        <Box sx={{ textAlign: "right" }}>
+                          <Typography
+                            sx={{
+                              fontFamily: MONO,
+                              fontWeight: 700,
+                              fontSize: "0.9rem",
+                            }}
+                          >
+                            ${formatCompactNumber(t.amount)}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              fontFamily: MONO,
+                              color: buy ? palette.mint : palette.rose,
+                            }}
+                          >
+                            {t.side}
+                          </Typography>
+                        </Box>
+                      </Stack>
+                    );
+                  })}
+                </Stack>
+              )}
+            </Panel>
+          </Grid>
+        </Grid>
       </Box>
 
-      {/* ── Deposit Modal ─────────────────────────────────────────── */}
+      {/* Deposit / Withdraw */}
       <Dialog
-        open={depositOpen}
-        onClose={() => {
-          setDepositOpen(false);
-          setTransactionMsg("");
-          setDepositAmount("");
-        }}
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            background: "linear-gradient(135deg, #1a1a2e, #16213e)",
-            border: "1px solid rgba(0,212,255,0.25)",
-            minWidth: 360,
-          },
-        }}
+        open={depositOpen || withdrawOpen}
+        onClose={closeModals}
+        PaperProps={{ sx: { borderRadius: 3, minWidth: 380 } }}
       >
-        <DialogTitle
-          sx={{
-            color: "white",
-            fontWeight: 700,
-            display: "flex",
-            alignItems: "center",
-            gap: 1.5,
-          }}
-        >
-          <Plus size={22} color="#10b981" />
-          Add Funds
+        <DialogTitle sx={{ fontWeight: 700 }}>
+          {depositOpen ? "Add funds" : "Withdraw funds"}
         </DialogTitle>
         <DialogContent>
-          {transactionMsg ? (
-            <Box sx={{ textAlign: "center", py: 2 }}>
-              <Typography variant="h6" color="#10b981" fontWeight={700}>
-                {transactionMsg}
-              </Typography>
-            </Box>
+          {msg ? (
+            <Typography
+              sx={{
+                py: 2,
+                textAlign: "center",
+                color: palette.mint,
+                fontWeight: 700,
+              }}
+            >
+              {msg}
+            </Typography>
           ) : (
             <>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Enter the amount you wish to deposit into your trading account.
+              <Typography variant="body2" sx={{ mb: 2.5 }}>
+                {depositOpen
+                  ? "Enter the amount to deposit into your trading account."
+                  : "Withdrawals typically arrive within 1-3 business days."}
               </Typography>
               <TextField
                 fullWidth
                 label="Amount (USD)"
                 type="number"
-                value={depositAmount}
-                onChange={(e) => setDepositAmount(e.target.value)}
-                inputProps={{ min: 1 }}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <DollarSign size={16} color="#00d4ff" />
+                      <DollarSign size={16} />
                     </InputAdornment>
                   ),
                 }}
-                InputLabelProps={{ sx: { color: "rgba(255,255,255,0.5)" } }}
-                sx={{
-                  "& .MuiOutlinedInput-root": {
-                    color: "white",
-                    "& fieldset": { borderColor: "rgba(255,255,255,0.2)" },
-                    "&:hover fieldset": { borderColor: "#00d4ff" },
-                    "&.Mui-focused fieldset": { borderColor: "#00d4ff" },
-                  },
-                }}
               />
-              {[100, 500, 1000, 5000].map((amt) => (
-                <Button
-                  key={amt}
-                  size="small"
-                  onClick={() => setDepositAmount(String(amt))}
-                  sx={{
-                    mt: 1,
-                    mr: 1,
-                    borderColor: "rgba(255,255,255,0.2)",
-                    color: "rgba(255,255,255,0.7)",
-                  }}
-                  variant="outlined"
-                >
-                  ${amt.toLocaleString()}
-                </Button>
-              ))}
+              <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
+                {[100, 500, 1000, 5000].map((a) => (
+                  <Button
+                    key={a}
+                    size="small"
+                    variant="outlined"
+                    onClick={() => setAmount(String(a))}
+                  >
+                    ${a >= 1000 ? `${a / 1000}k` : a}
+                  </Button>
+                ))}
+              </Stack>
             </>
           )}
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
-          <Button
-            onClick={() => {
-              setDepositOpen(false);
-              setTransactionMsg("");
-              setDepositAmount("");
-            }}
-            sx={{ color: "rgba(255,255,255,0.6)" }}
-          >
-            {transactionMsg ? "Close" : "Cancel"}
-          </Button>
-          {!transactionMsg && (
+        {!msg && (
+          <DialogActions sx={{ px: 3, pb: 2.5 }}>
+            <Button onClick={closeModals} sx={{ color: "text.secondary" }}>
+              Cancel
+            </Button>
             <Button
               variant="contained"
-              onClick={() => {
-                if (!depositAmount || parseFloat(depositAmount) <= 0) return;
-                setTransactionMsg(
-                  `✓ $${parseFloat(depositAmount).toLocaleString()} successfully deposited!`,
-                );
-                setTimeout(() => {
-                  setDepositOpen(false);
-                  setTransactionMsg("");
-                  setDepositAmount("");
-                }, 2000);
-              }}
-              sx={{
-                background: "linear-gradient(45deg, #10b981, #059669)",
-                fontWeight: 600,
-                borderRadius: 2,
-              }}
+              onClick={() => submitTxn(depositOpen ? "deposit" : "withdraw")}
             >
-              Deposit Funds
+              {depositOpen ? "Deposit" : "Withdraw"}
             </Button>
-          )}
-        </DialogActions>
-      </Dialog>
-
-      {/* ── Withdraw Modal ────────────────────────────────────────── */}
-      <Dialog
-        open={withdrawOpen}
-        onClose={() => {
-          setWithdrawOpen(false);
-          setTransactionMsg("");
-          setWithdrawAmount("");
-        }}
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            background: "linear-gradient(135deg, #1a1a2e, #16213e)",
-            border: "1px solid rgba(239,68,68,0.25)",
-            minWidth: 360,
-          },
-        }}
-      >
-        <DialogTitle
-          sx={{
-            color: "white",
-            fontWeight: 700,
-            display: "flex",
-            alignItems: "center",
-            gap: 1.5,
-          }}
-        >
-          <Minus size={22} color="#ef4444" />
-          Withdraw Funds
-        </DialogTitle>
-        <DialogContent>
-          {transactionMsg ? (
-            <Box sx={{ textAlign: "center", py: 2 }}>
-              <Typography variant="h6" color="#10b981" fontWeight={700}>
-                {transactionMsg}
-              </Typography>
-            </Box>
-          ) : (
-            <>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                Available balance:{" "}
-                <strong style={{ color: "#10b981" }}>$48,235.00</strong>
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Withdrawals typically arrive within 1–3 business days.
-              </Typography>
-              <TextField
-                fullWidth
-                label="Amount (USD)"
-                type="number"
-                value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
-                inputProps={{ min: 1, max: 48235 }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <DollarSign size={16} color="#ef4444" />
-                    </InputAdornment>
-                  ),
-                }}
-                InputLabelProps={{ sx: { color: "rgba(255,255,255,0.5)" } }}
-                sx={{
-                  "& .MuiOutlinedInput-root": {
-                    color: "white",
-                    "& fieldset": { borderColor: "rgba(255,255,255,0.2)" },
-                    "&:hover fieldset": { borderColor: "#ef4444" },
-                    "&.Mui-focused fieldset": { borderColor: "#ef4444" },
-                  },
-                }}
-              />
-            </>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
-          <Button
-            onClick={() => {
-              setWithdrawOpen(false);
-              setTransactionMsg("");
-              setWithdrawAmount("");
-            }}
-            sx={{ color: "rgba(255,255,255,0.6)" }}
-          >
-            {transactionMsg ? "Close" : "Cancel"}
-          </Button>
-          {!transactionMsg && (
-            <Button
-              variant="contained"
-              onClick={() => {
-                const amt = parseFloat(withdrawAmount);
-                if (!withdrawAmount || amt <= 0) return;
-                if (amt > 48235) {
-                  setTransactionMsg("Insufficient funds.");
-                  return;
-                }
-                setTransactionMsg(
-                  `✓ $${amt.toLocaleString()} withdrawal initiated!`,
-                );
-                setTimeout(() => {
-                  setWithdrawOpen(false);
-                  setTransactionMsg("");
-                  setWithdrawAmount("");
-                }, 2000);
-              }}
-              sx={{
-                background: "linear-gradient(45deg, #ef4444, #dc2626)",
-                fontWeight: 600,
-                borderRadius: 2,
-              }}
-            >
-              Withdraw Funds
-            </Button>
-          )}
-        </DialogActions>
+          </DialogActions>
+        )}
       </Dialog>
     </ErrorBoundary>
   );

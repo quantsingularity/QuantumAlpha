@@ -1,16 +1,4 @@
 import {
-  Assessment as AssessmentIcon,
-  Bookmark as BookmarkIcon,
-  Dashboard as DashboardIcon,
-  ExitToApp as ExitToAppIcon,
-  Menu as MenuIcon,
-  Newspaper as NewspaperIcon,
-  Person as PersonIcon,
-  Settings as SettingsIcon,
-  ShowChart as ShowChartIcon,
-  TrendingUp as TrendingUpIcon,
-} from "@mui/icons-material";
-import {
   AppBar,
   Avatar,
   Box,
@@ -21,32 +9,68 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  Stack,
   Toolbar,
   Tooltip,
   Typography,
-  useTheme,
+  useMediaQuery,
 } from "@mui/material";
+import {
+  BarChart3,
+  Bell,
+  Bookmark,
+  CandlestickChart,
+  LayoutDashboard,
+  LogOut,
+  Menu as MenuIcon,
+  Newspaper,
+  Settings,
+  TrendingUp,
+} from "lucide-react";
+import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import NotificationCenter from "../components/common/NotificationCenter";
-import NotificationPanel from "../components/common/NotificationPanel";
+import { Logo, Wordmark } from "../components/common/Brand";
+import { palette } from "../theme/tokens";
 import { logout } from "../store/slices/authSlice";
-import { toggleDrawer } from "../store/slices/uiSlice";
+import { setDrawerOpen } from "../store/slices/uiSlice";
+
+const DRAWER_WIDTH = 248;
+
+const navItems = [
+  {
+    path: "/dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    exact: true,
+  },
+  { path: "/strategies", label: "Strategies", icon: TrendingUp },
+  { path: "/trading", label: "Trading", icon: CandlestickChart },
+  { path: "/analytics", label: "Analytics", icon: BarChart3 },
+  { path: "/watchlist", label: "Watchlist", icon: Bookmark },
+  { path: "/news", label: "News", icon: Newspaper },
+];
+
+const secondaryItems = [
+  { path: "/settings", label: "Settings", icon: Settings },
+];
 
 const MainLayout = () => {
-  const theme = useTheme();
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
+  const isDesktop = useMediaQuery("(min-width:900px)");
   const { drawerOpen } = useSelector((state) => state.ui);
   const { user } = useSelector((state) => state.auth);
 
-  const handleDrawerToggle = () => {
-    dispatch(toggleDrawer());
-  };
+  // Open the rail by default on desktop, closed on mobile.
+  useEffect(() => {
+    dispatch(setDrawerOpen(isDesktop));
+  }, [isDesktop, dispatch]);
 
-  const handleNavigation = (path) => {
+  const go = (path) => {
     navigate(path);
+    if (!isDesktop) dispatch(setDrawerOpen(false));
   };
 
   const handleLogout = () => {
@@ -54,194 +78,169 @@ const MainLayout = () => {
     navigate("/login");
   };
 
-  const drawerWidth = 240;
+  const isActive = (path, exact) =>
+    exact ? location.pathname === path : location.pathname.startsWith(path);
 
-  const navItems = [
-    {
-      path: "/dashboard",
-      label: "Dashboard",
-      icon: DashboardIcon,
-      exact: true,
-    },
-    { path: "/strategies", label: "Strategies", icon: TrendingUpIcon },
-    { path: "/trading", label: "Trading", icon: ShowChartIcon },
-    { path: "/analytics", label: "Analytics", icon: AssessmentIcon },
-    { path: "/watchlist", label: "Watchlist", icon: BookmarkIcon },
-    { path: "/news", label: "News Feed", icon: NewspaperIcon },
-  ];
-
-  const isActive = (path, exact) => {
-    if (exact) return location.pathname === path;
-    return location.pathname.startsWith(path);
+  const navButton = ({ path, label, icon: Icon, exact }) => {
+    const active = isActive(path, exact);
+    return (
+      <ListItemButton
+        key={path}
+        onClick={() => go(path)}
+        sx={{
+          borderRadius: 2,
+          mx: 1.25,
+          mb: 0.5,
+          py: 1,
+          color: active ? palette.text : palette.textDim,
+          background: active ? "rgba(34,211,238,0.10)" : "transparent",
+          position: "relative",
+          "&::before": active
+            ? {
+                content: '""',
+                position: "absolute",
+                left: 0,
+                top: "20%",
+                bottom: "20%",
+                width: 3,
+                borderRadius: 4,
+                background: palette.cyan,
+              }
+            : {},
+          "&:hover": {
+            background: "rgba(148,163,184,0.08)",
+            color: palette.text,
+          },
+        }}
+      >
+        <ListItemIcon
+          sx={{ minWidth: 38, color: active ? palette.cyan : "inherit" }}
+        >
+          <Icon size={19} />
+        </ListItemIcon>
+        <ListItemText
+          primary={label}
+          primaryTypographyProps={{
+            fontSize: "0.9rem",
+            fontWeight: active ? 600 : 500,
+          }}
+        />
+      </ListItemButton>
+    );
   };
+
+  const drawerContent = (
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <Box sx={{ px: 2.5, py: 2.5 }}>
+        <Wordmark size={28} />
+      </Box>
+      <Divider sx={{ borderColor: palette.border }} />
+      <List sx={{ pt: 1.5, flexGrow: 1 }}>{navItems.map(navButton)}</List>
+      <Divider sx={{ borderColor: palette.border }} />
+      <List sx={{ py: 1 }}>
+        {secondaryItems.map(navButton)}
+        <ListItemButton
+          onClick={handleLogout}
+          sx={{
+            borderRadius: 2,
+            mx: 1.25,
+            py: 1,
+            color: palette.rose,
+            "&:hover": { background: "rgba(251,113,133,0.1)" },
+          }}
+        >
+          <ListItemIcon sx={{ minWidth: 38, color: palette.rose }}>
+            <LogOut size={19} />
+          </ListItemIcon>
+          <ListItemText
+            primary="Log out"
+            primaryTypographyProps={{ fontSize: "0.9rem", fontWeight: 500 }}
+          />
+        </ListItemButton>
+      </List>
+    </Box>
+  );
+
+  const currentLabel =
+    [...navItems, ...secondaryItems].find((n) => isActive(n.path, n.exact))
+      ?.label || "QuantumAlpha";
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
-      {/* App Bar */}
-      <AppBar position="fixed" sx={{ zIndex: (t) => t.zIndex.drawer + 1 }}>
-        <Toolbar>
+      <AppBar
+        position="fixed"
+        sx={{
+          width: { md: drawerOpen ? `calc(100% - ${DRAWER_WIDTH}px)` : "100%" },
+          ml: { md: drawerOpen ? `${DRAWER_WIDTH}px` : 0 },
+          transition: "width .25s ease, margin .25s ease",
+        }}
+      >
+        <Toolbar sx={{ gap: 1 }}>
           <IconButton
             color="inherit"
-            aria-label="open drawer"
             edge="start"
-            onClick={handleDrawerToggle}
-            sx={{ mr: 2 }}
+            onClick={() => dispatch(setDrawerOpen(!drawerOpen))}
           >
-            <MenuIcon />
+            <MenuIcon size={20} />
           </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            QuantumAlpha Trading Platform
+          <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 700 }}>
+            {currentLabel}
           </Typography>
-          <NotificationCenter />
+          <Tooltip title="Notifications">
+            <IconButton color="inherit">
+              <Bell size={19} />
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Profile">
-            <IconButton
-              color="inherit"
-              onClick={() => handleNavigation("/profile")}
-            >
+            <IconButton onClick={() => navigate("/profile")} sx={{ p: 0.5 }}>
               <Avatar
                 sx={{
                   width: 32,
                   height: 32,
-                  bgcolor: "primary.main",
-                  fontSize: "0.875rem",
+                  background: "linear-gradient(135deg,#22D3EE,#8B5CF6)",
+                  color: "#060A14",
+                  fontSize: "0.85rem",
+                  fontWeight: 700,
                 }}
               >
-                {user?.firstName?.[0] || user?.email?.[0]?.toUpperCase() || "U"}
+                {user?.firstName?.[0] ||
+                  user?.name?.[0] ||
+                  user?.email?.[0]?.toUpperCase() ||
+                  "U"}
               </Avatar>
             </IconButton>
           </Tooltip>
         </Toolbar>
       </AppBar>
 
-      {/* Side Drawer */}
       <Drawer
-        variant="persistent"
-        anchor="left"
+        variant={isDesktop ? "persistent" : "temporary"}
         open={drawerOpen}
+        onClose={() => dispatch(setDrawerOpen(false))}
         sx={{
-          width: drawerWidth,
+          width: drawerOpen ? DRAWER_WIDTH : 0,
           flexShrink: 0,
           "& .MuiDrawer-paper": {
-            width: drawerWidth,
+            width: DRAWER_WIDTH,
             boxSizing: "border-box",
-            backgroundColor: "background.paper",
           },
         }}
       >
-        <Toolbar />
-        <Box
-          sx={{
-            overflow: "auto",
-            mt: 2,
-            display: "flex",
-            flexDirection: "column",
-            height: "100%",
-          }}
-        >
-          <List>
-            {navItems.map(({ path, label, icon: Icon, exact }) => (
-              <ListItemButton
-                key={path}
-                onClick={() => handleNavigation(path)}
-                selected={isActive(path, exact)}
-                sx={{
-                  borderRadius: 2,
-                  mx: 1,
-                  mb: 0.5,
-                  "&.Mui-selected": {
-                    background:
-                      "linear-gradient(45deg, rgba(0,212,255,0.15), rgba(0,153,204,0.1))",
-                    borderLeft: "3px solid #00d4ff",
-                    "& .MuiListItemIcon-root": { color: "primary.main" },
-                  },
-                }}
-              >
-                <ListItemIcon>
-                  <Icon />
-                </ListItemIcon>
-                <ListItemText primary={label} />
-              </ListItemButton>
-            ))}
-          </List>
-          <Divider sx={{ my: 1 }} />
-          <List>
-            <ListItemButton
-              onClick={() => handleNavigation("/settings")}
-              selected={isActive("/settings", true)}
-              sx={{
-                borderRadius: 2,
-                mx: 1,
-                mb: 0.5,
-                "&.Mui-selected": {
-                  background:
-                    "linear-gradient(45deg, rgba(0,212,255,0.15), rgba(0,153,204,0.1))",
-                  borderLeft: "3px solid #00d4ff",
-                  "& .MuiListItemIcon-root": { color: "primary.main" },
-                },
-              }}
-            >
-              <ListItemIcon>
-                <SettingsIcon />
-              </ListItemIcon>
-              <ListItemText primary="Settings" />
-            </ListItemButton>
-            <ListItemButton
-              onClick={() => handleNavigation("/profile")}
-              selected={isActive("/profile", true)}
-              sx={{
-                borderRadius: 2,
-                mx: 1,
-                mb: 0.5,
-                "&.Mui-selected": {
-                  background:
-                    "linear-gradient(45deg, rgba(0,212,255,0.15), rgba(0,153,204,0.1))",
-                  borderLeft: "3px solid #00d4ff",
-                  "& .MuiListItemIcon-root": { color: "primary.main" },
-                },
-              }}
-            >
-              <ListItemIcon>
-                <PersonIcon />
-              </ListItemIcon>
-              <ListItemText primary="Profile" />
-            </ListItemButton>
-            <ListItemButton
-              onClick={handleLogout}
-              sx={{ borderRadius: 2, mx: 1, mb: 0.5, color: "error.main" }}
-            >
-              <ListItemIcon sx={{ color: "error.main" }}>
-                <ExitToAppIcon />
-              </ListItemIcon>
-              <ListItemText primary="Logout" />
-            </ListItemButton>
-          </List>
-        </Box>
+        {drawerContent}
       </Drawer>
 
-      {/* Main Content */}
       <Box
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
-          backgroundColor: "background.default",
-          marginLeft: drawerOpen ? `${drawerWidth}px` : 0,
-          transition: theme.transitions.create("margin", {
-            easing: drawerOpen
-              ? theme.transitions.easing.easeOut
-              : theme.transitions.easing.sharp,
-            duration: drawerOpen
-              ? theme.transitions.duration.enteringScreen
-              : theme.transitions.duration.leavingScreen,
-          }),
+          p: { xs: 2, md: 4 },
+          width: { md: drawerOpen ? `calc(100% - ${DRAWER_WIDTH}px)` : "100%" },
+          transition: "width .25s ease",
         }}
       >
         <Toolbar />
         <Outlet />
       </Box>
-
-      {/* Notification Panel */}
-      <NotificationPanel />
     </Box>
   );
 };

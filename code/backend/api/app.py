@@ -626,15 +626,19 @@ def delete_strategy(strategy_id: str) -> Tuple[Any, int]:
 
 
 @app.route("/api/trades", methods=["GET"])
+@app.route("/api/trade/orders", methods=["GET"])
 def get_trades() -> Tuple[Any, int]:
     symbol = (request.args.get("symbol") or "").upper() or None
     status = request.args.get("status")
+    limit = request.args.get("limit", type=int)
 
     trades = MOCK_TRADES
     if symbol:
         trades = [t for t in trades if t["symbol"] == symbol]
     if status:
         trades = [t for t in trades if t["status"] == status]
+    if limit and limit > 0:
+        trades = trades[:limit]
 
     return _ok(trades)
 

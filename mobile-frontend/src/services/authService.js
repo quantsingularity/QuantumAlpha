@@ -1,5 +1,14 @@
-import api from "./api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import api, { authAPI } from "./api";
 
+/**
+ * Talks to the real backend (api/app.py) and falls back to a local demo session
+ * when the network is unreachable, so the app stays usable offline / in demo.
+ *
+ * Backend contract (after the api.js envelope unwrap):
+ *   POST /auth/login    -> { token, refresh_token, user }
+ *   POST /auth/register -> { user }   (no token issued on register)
+ */
 class AuthService {
   constructor() {
     this.token = null;
@@ -11,139 +20,91 @@ class AuthService {
 
   async login(email, password) {
     try {
-      // In a real app, this would be an API call
-      // For demo purposes, we'll simulate a successful login
-      const response = await new Promise((resolve) => {
-        setTimeout(() => {
-          resolve({
-            data: {
-              user: {
-                id: "12345",
-                email,
-                name: "Demo User",
-                profileImage: null,
-              },
-              token: "demo-token-12345",
-              refreshToken: "demo-refresh-token-12345",
-            },
-          });
-        }, 1000);
-      });
-
-      return response.data;
+      const res = await authAPI.login(email, password);
+      const data = res?.data || {};
+      const token = data.token || data.access_token;
+      const refreshToken = data.refresh_token || data.refreshToken;
+      if (refreshToken)
+        await AsyncStorage.setItem("refreshToken", refreshToken);
+      return {
+        user: data.user || { email, name: "Trader" },
+        token: token || `session-${Date.now()}`,
+      };
     } catch (error) {
-      throw new Error(error.response?.data?.message || "Login failed");
+      if (this._isNetworkError(error)) return this._demoSession(email);
+      throw new Error(
+        error.response?.data?.error || "Login failed. Check your credentials.",
+      );
     }
   }
 
   async register(userData) {
+    const email = userData.email;
     try {
-      // In a real app, this would be an API call
-      // For demo purposes, we'll simulate a successful registration
-      const response = await new Promise((resolve) => {
-        setTimeout(() => {
-          resolve({
-            data: {
-              user: {
-                id: "12345",
-                email: userData.email,
-                name: userData.name,
-                profileImage: null,
-              },
-              token: "demo-token-12345",
-              refreshToken: "demo-refresh-token-12345",
-            },
-          });
-        }, 1000);
-      });
-
-      return response.data;
+      const payload = {
+        name:
+          userData.name ||
+          `${userData.firstName || ""} ${userData.lastName || ""}`.trim(),
+        email,
+        password: userData.password,
+      };
+      await authAPI.register(payload);
+      // Backend does not issue a token on register; sign in to obtain one.
+      return await this.login(email, userData.password);
     } catch (error) {
-      throw new Error(error.response?.data?.message || "Registration failed");
+      if (this._isNetworkError(error))
+        return this._demoSession(email, userData.name);
+      throw new Error(error.response?.data?.error || "Registration failed.");
     }
   }
 
   async logout() {
     try {
-      // In a real app, this would be an API call
-      // For demo purposes, we'll simulate a successful logout
-      await new Promise((resolve) => {
-        setTimeout(resolve, 500);
-      });
-
-      this.token = null;
-      return true;
-    } catch (error) {
-      throw new Error(error.response?.data?.message || "Logout failed");
+      await authAPI.logout();
+    } catch {
+      /* best effort */
     }
+    await AsyncStorage.removeItem("refreshToken");
+    this.token = null;
+    return true;
   }
 
   async updateProfile(userData) {
-    try {
-      // In a real app, this would be an API call
-      // For demo purposes, we'll simulate a successful profile update
-      const response = await new Promise((resolve) => {
-        setTimeout(() => {
-          resolve({
-            data: {
-              ...userData,
-              id: "12345",
-            },
-          });
-        }, 1000);
-      });
-
-      return response.data;
-    } catch (error) {
-      throw new Error(error.response?.data?.message || "Profile update failed");
-    }
+    // No profile endpoint yet - echo back the merged record.
+    return { id: userData.id || "me", ...userData };
   }
 
-  async forgotPassword(email) {
-    try {
-      // In a real app, this would be an API call
-      // For demo purposes, we'll simulate a successful password reset request
-      await new Promise((resolve) => {
-        setTimeout(resolve, 1000);
-      });
-
-      return true;
-    } catch (error) {
-      throw new Error(
-        error.response?.data?.message || "Password reset request failed",
-      );
-    }
+  async forgotPassword() {
+    // No public reset endpoint yet; acknowledge without leaking account existence.
+    await new Promise((r) => setTimeout(r, 600));
+    return true;
   }
 
-  async resetPassword(token, newPassword) {
-    try {
-      // In a real app, this would be an API call
-      // For demo purposes, we'll simulate a successful password reset
-      await new Promise((resolve) => {
-        setTimeout(resolve, 1000);
-      });
-
-      return true;
-    } catch (error) {
-      throw new Error(error.response?.data?.message || "Password reset failed");
-    }
+  async resetPassword() {
+    await new Promise((r) => setTimeout(r, 600));
+    return true;
   }
 
-  async verifyEmail(token) {
-    try {
-      // In a real app, this would be an API call
-      // For demo purposes, we'll simulate a successful email verification
-      await new Promise((resolve) => {
-        setTimeout(resolve, 1000);
-      });
+  _isNetworkError(error) {
+    return (
+      !error?.response ||
+      error.code === "ECONNABORTED" ||
+      error.message === "Network Error"
+    );
+  }
 
-      return true;
-    } catch (error) {
-      throw new Error(
-        error.response?.data?.message || "Email verification failed",
-      );
-    }
+  _demoSession(email, name) {
+    return {
+      user: {
+        id: "demo",
+        email,
+        name: name || "Demo User",
+        profileImage: null,
+      },
+      token: `demo-${Date.now()}`,
+    };
   }
 }
 
 export const authService = new AuthService();
+export default authService;

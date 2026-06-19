@@ -1,16 +1,39 @@
 import { createSlice } from "@reduxjs/toolkit";
 
-const initialState = {
-  isAuthenticated: false,
-  user: null,
-  token: null,
-  loading: false,
-  error: null,
+/**
+ * Auth state is hydrated from localStorage on boot and persisted on every
+ * change (see store/index.js). This is what keeps a logged-in user logged in
+ * across refreshes instead of bouncing back to the login screen.
+ */
+const TOKEN_KEY = "qa_token";
+const USER_KEY = "qa_user";
+
+const loadInitialState = () => {
+  try {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const userRaw = localStorage.getItem(USER_KEY);
+    const user = userRaw ? JSON.parse(userRaw) : null;
+    return {
+      isAuthenticated: Boolean(token),
+      user,
+      token: token || null,
+      loading: false,
+      error: null,
+    };
+  } catch {
+    return {
+      isAuthenticated: false,
+      user: null,
+      token: null,
+      loading: false,
+      error: null,
+    };
+  }
 };
 
 const authSlice = createSlice({
   name: "auth",
-  initialState,
+  initialState: loadInitialState(),
   reducers: {
     loginStart: (state) => {
       state.loading = true;
@@ -40,5 +63,5 @@ const authSlice = createSlice({
 
 export const { loginStart, loginSuccess, loginFailure, logout, updateUser } =
   authSlice.actions;
-
+export { TOKEN_KEY, USER_KEY };
 export default authSlice.reducer;

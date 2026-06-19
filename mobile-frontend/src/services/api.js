@@ -37,6 +37,17 @@ api.interceptors.request.use(
 // Response interceptor for handling errors
 api.interceptors.response.use(
   (response) => {
+    // The backend wraps payloads as { success, data, timestamp }. Unwrap here so
+    // every service receives the raw payload via response.data.
+    if (
+      response &&
+      response.data &&
+      typeof response.data === "object" &&
+      "success" in response.data &&
+      "data" in response.data
+    ) {
+      response.data = response.data.data;
+    }
     return response;
   },
   async (error) => {

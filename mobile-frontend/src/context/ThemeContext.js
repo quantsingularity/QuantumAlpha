@@ -1,45 +1,75 @@
-import React, { createContext, useState, useContext, useCallback } from "react";
-import { useColorScheme } from "react-native";
+import React, {
+  createContext,
+  useState,
+  useContext,
+  useCallback,
+  useEffect,
+} from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const lightTheme = {
-  primary: "#1aff92",
-  secondary: "#0066cc",
-  background: "#f8f9fa",
-  card: "#ffffff",
-  surface: "#ffffff",
-  text: "#121212",
-  textSecondary: "#666666",
-  border: "#e1e1e1",
-  notification: "#ff3b30",
-  error: "#ff4d4d",
-  success: "#34c759",
-  warning: "#ffcc00",
-  info: "#0066cc",
-  shadow: "#000000",
-  chartBackground: "#ffffff",
-  chartBackgroundGradientFrom: "#ffffff",
-  chartBackgroundGradientTo: "#f8f9fa",
+/**
+ * Shared "Quantum Terminal" tokens - mirrors web-frontend/src/theme/tokens.js
+ * so the two clients read as one product (cyan primary, violet secondary, deep
+ * navy surfaces, monospaced numerics).
+ */
+const brand = {
+  cyan: "#22D3EE",
+  violet: "#8B5CF6",
+  mint: "#34D399",
+  rose: "#FB7185",
+  amber: "#FBBF24",
+  fontSans: undefined, // system sans on device
+  fontMono: "monospace",
 };
 
 const darkTheme = {
-  primary: "#1aff92",
-  secondary: "#0a84ff",
-  background: "#121212",
-  card: "#1e1e1e",
-  surface: "#2a2a2a",
-  text: "#ffffff",
-  textSecondary: "#cccccc",
-  border: "#2c2c2c",
-  notification: "#ff453a",
-  error: "#ff4d4d",
-  success: "#32d74b",
-  warning: "#ffd60a",
-  info: "#0a84ff",
+  ...brand,
+  primary: brand.cyan,
+  secondary: brand.violet,
+  background: "#060A14",
+  backgroundElevated: "#0A1020",
+  card: "#0F1626",
+  surface: "#15203A",
+  text: "#F1F5F9",
+  textSecondary: "#94A3B8",
+  textMuted: "#5B6B85",
+  border: "rgba(148,163,184,0.16)",
+  notification: brand.rose,
+  error: brand.rose,
+  success: brand.mint,
+  warning: brand.amber,
+  info: brand.cyan,
   shadow: "#000000",
-  chartBackground: "#1e1e1e",
-  chartBackgroundGradientFrom: "#1e1e1e",
-  chartBackgroundGradientTo: "#1e1e1e",
+  gradient: [brand.cyan, brand.violet],
+  chartBackground: "#0F1626",
+  chartBackgroundGradientFrom: "#0F1626",
+  chartBackgroundGradientTo: "#0F1626",
+  isDark: true,
+};
+
+const lightTheme = {
+  ...brand,
+  primary: "#0891B2",
+  secondary: brand.violet,
+  background: "#F4F7FB",
+  backgroundElevated: "#FFFFFF",
+  card: "#FFFFFF",
+  surface: "#F0F4FA",
+  text: "#0B1020",
+  textSecondary: "#475569",
+  textMuted: "#94A3B8",
+  border: "rgba(15,23,42,0.10)",
+  notification: brand.rose,
+  error: "#E11D48",
+  success: "#059669",
+  warning: "#D97706",
+  info: "#0891B2",
+  shadow: "#0B1020",
+  gradient: ["#0891B2", brand.violet],
+  chartBackground: "#FFFFFF",
+  chartBackgroundGradientFrom: "#FFFFFF",
+  chartBackgroundGradientTo: "#F4F7FB",
+  isDark: false,
 };
 
 const ThemeContext = createContext();
@@ -47,8 +77,17 @@ const ThemeContext = createContext();
 export const useTheme = () => useContext(ThemeContext);
 
 export const ThemeProvider = ({ children }) => {
-  const deviceTheme = useColorScheme();
-  const [isDarkMode, setIsDarkMode] = useState(deviceTheme === "dark");
+  // The brand is a dark trading terminal, so default to dark.
+  const [isDarkMode, setIsDarkMode] = useState(true);
+
+  useEffect(() => {
+    AsyncStorage.getItem("theme_preference")
+      .then((pref) => {
+        if (pref === "light") setIsDarkMode(false);
+        else if (pref === "dark") setIsDarkMode(true);
+      })
+      .catch(() => {});
+  }, []);
 
   const theme = isDarkMode ? darkTheme : lightTheme;
 
@@ -62,27 +101,13 @@ export const ThemeProvider = ({ children }) => {
     });
   }, []);
 
-  const setTheme = useCallback(
-    (preference) => {
-      if (preference === "auto") {
-        setIsDarkMode(deviceTheme === "dark");
-      } else {
-        setIsDarkMode(preference === "dark");
-      }
-      AsyncStorage.setItem("theme_preference", preference).catch(() => {});
-    },
-    [deviceTheme],
-  );
+  const setTheme = useCallback((preference) => {
+    setIsDarkMode(preference !== "light");
+    AsyncStorage.setItem("theme_preference", preference).catch(() => {});
+  }, []);
 
   return (
-    <ThemeContext.Provider
-      value={{
-        theme,
-        isDarkMode,
-        toggleTheme,
-        setTheme,
-      }}
-    >
+    <ThemeContext.Provider value={{ theme, isDarkMode, toggleTheme, setTheme }}>
       {children}
     </ThemeContext.Provider>
   );

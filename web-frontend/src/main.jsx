@@ -5,6 +5,7 @@ import ReactDOM from "react-dom/client";
 import { Provider, useSelector } from "react-redux";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
+import ErrorBoundary from "./components/common/ErrorBoundary";
 import { store } from "./store";
 import { createAppTheme } from "./theme";
 
@@ -16,7 +17,9 @@ const ThemedApp = () => {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </ThemeProvider>
   );
 };

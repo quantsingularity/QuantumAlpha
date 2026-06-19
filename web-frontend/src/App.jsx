@@ -1,8 +1,9 @@
 import { useSelector } from "react-redux";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
 import Analytics from "./pages/Analytics";
 import Dashboard from "./pages/Dashboard";
+import ForgotPassword from "./pages/ForgotPassword";
 import Homepage from "./pages/Homepage";
 import Login from "./pages/Login";
 import NewsFeed from "./pages/NewsFeed";
@@ -16,16 +17,25 @@ import StrategyDetails from "./pages/StrategyDetails";
 import Trading from "./pages/Trading";
 import Watchlist from "./pages/Watchlist";
 
+// Gate that remembers where the user was headed so login can return them there.
+const RequireAuth = ({ children }) => {
+  const { isAuthenticated } = useSelector((state) => state.auth);
+  const location = useLocation();
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+  return children;
+};
+
 const App = () => {
   const { isAuthenticated } = useSelector((state) => state.auth);
 
   return (
     <Routes>
-      {/* ── Public / Landing ─────────────────────────────── */}
-      {/* Homepage always accessible; shows CTA or "Go to Dashboard" */}
+      {/* Public / landing - the app always opens here */}
       <Route path="/" element={<Homepage />} />
 
-      {/* Auth pages — redirect authenticated users to dashboard */}
+      {/* Auth pages redirect authenticated users into the app */}
       <Route
         path="/login"
         element={
@@ -38,73 +48,94 @@ const App = () => {
           !isAuthenticated ? <Register /> : <Navigate to="/dashboard" replace />
         }
       />
-
-      {/* OAuth 2.0 PKCE callback handler */}
+      <Route
+        path="/forgot-password"
+        element={
+          !isAuthenticated ? (
+            <ForgotPassword />
+          ) : (
+            <Navigate to="/dashboard" replace />
+          )
+        }
+      />
       <Route path="/auth/callback" element={<OAuthCallback />} />
 
-      {/* ── Protected routes (inside sidebar layout) ─────── */}
+      {/* Protected app routes inside the sidebar shell */}
       <Route element={<MainLayout />}>
         <Route
           path="/dashboard"
           element={
-            isAuthenticated ? <Dashboard /> : <Navigate to="/login" replace />
+            <RequireAuth>
+              <Dashboard />
+            </RequireAuth>
           }
         />
         <Route
           path="/strategies"
           element={
-            isAuthenticated ? <Strategies /> : <Navigate to="/login" replace />
+            <RequireAuth>
+              <Strategies />
+            </RequireAuth>
           }
         />
         <Route
           path="/strategies/:id"
           element={
-            isAuthenticated ? (
+            <RequireAuth>
               <StrategyDetails />
-            ) : (
-              <Navigate to="/login" replace />
-            )
+            </RequireAuth>
           }
         />
         <Route
           path="/analytics"
           element={
-            isAuthenticated ? <Analytics /> : <Navigate to="/login" replace />
+            <RequireAuth>
+              <Analytics />
+            </RequireAuth>
           }
         />
         <Route
           path="/trading"
           element={
-            isAuthenticated ? <Trading /> : <Navigate to="/login" replace />
+            <RequireAuth>
+              <Trading />
+            </RequireAuth>
           }
         />
         <Route
           path="/profile"
           element={
-            isAuthenticated ? <Profile /> : <Navigate to="/login" replace />
+            <RequireAuth>
+              <Profile />
+            </RequireAuth>
           }
         />
         <Route
           path="/watchlist"
           element={
-            isAuthenticated ? <Watchlist /> : <Navigate to="/login" replace />
+            <RequireAuth>
+              <Watchlist />
+            </RequireAuth>
           }
         />
         <Route
           path="/news"
           element={
-            isAuthenticated ? <NewsFeed /> : <Navigate to="/login" replace />
+            <RequireAuth>
+              <NewsFeed />
+            </RequireAuth>
           }
         />
         <Route
           path="/settings"
           element={
-            isAuthenticated ? <Settings /> : <Navigate to="/login" replace />
+            <RequireAuth>
+              <Settings />
+            </RequireAuth>
           }
         />
       </Route>
 
-      {/* ── 404 ─────────────────────────────────────────── */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
